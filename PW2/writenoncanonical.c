@@ -5,6 +5,9 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -15,13 +18,83 @@
 #define FLAG 0x7e
 #define A 0x03
 #define C 0x03
-#define UA 0x07
 
+int fd;
+unsigned char set[5];
+unsigned char resp[5];
+unsigned char c;
+char res[5];
+int state = 0;
 volatile int STOP=FALSE;
+
+int stateMachine(char c, int state){
+    switch(state) {
+        case(0):
+            if(c == FLAG){
+                res[state] = c;
+                state++;
+            }
+        break;
+        case(1):
+            if(c == A){
+                res[state] = c;
+                state++;
+            }
+            else state = 0;
+        break;
+        case(2):
+            if(c == C){
+                res[state] = c;
+                state++;
+            }
+            else state = 0;
+        break;
+        case(3):
+            if(c == res[1]^res[2]){
+                res[state] = c;
+                state++;
+            }
+            else state = 0;
+        break;
+        case(4):
+            if(c == FLAG){
+                res[state] = c;
+                state++;
+            }
+            else state = 0;
+        break;
+    }
+
+    return state;
+}
+
+//Response state machine
+void getResponse(){
+    while(state != 5){
+        if(read(fd, &c, 1) < 0){
+            perror("read failed!");
+            exit(-1);
+        }
+
+       state = stateMachine(c, state);
+       printf("Response: %x\n", res);
+    }
+}
+
+//Set and Write
+void setWrite(){
+
+	set[0] = FLAG;
+	set[1] = A;
+ 	set[2] = C;
+	set[3] = A ^ C;
+	set[4] = FLAG;
+
+	write(fd, set, 5);
+}
 
 int main(int argc, char** argv)
 {
-    int fd;
     struct termios oldtio,newtio;
     char buf[255];
     int i, sum = 0, speed = 0;
@@ -38,7 +111,6 @@ int main(int argc, char** argv)
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
-
 
     fd = open(argv[1], O_RDWR | O_NOCTTY );
     if (fd <0) {perror(argv[1]); exit(-1); }
@@ -60,13 +132,10 @@ int main(int argc, char** argv)
     newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
 
 
-
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) pr�ximo(s) caracter(es)
   */
-
-
 
     tcflush(fd, TCIOFLUSH);
 
@@ -78,74 +147,13 @@ int main(int argc, char** argv)
     printf("New termios structure set\n");
 
 	//SET AND WRITE
-
-	unsigned char set[5];
-
-	set[0] = FLAG;
-	set[1] = A;
- 	set[2] = C;
-	set[3] = A ^ C;
-	set[4] = FLAG;
-
-	write(fd, set, 5);
-
-	//Response
-
-	sleep(1);
-
-  unsigned char resp[5];
-	unsigned char c;
-	char res[5];
+    printf("Sendind message!\n");
+    setWrite();
+    printf("Message: %x\n", set);
 
 	//reads response from other machine
-
-  //state machine
-
-  int state = 0;
-
-  while(state != 5){
-    if(read(fd, &c, 1) < 0){
-  		perror("read failed!");
-  		exit(-1);
-  	}
-
-  	switch(state) {
-  		case(0):
-  				if(c == FLAG){
-              res[state] = c;
-              state++;
-          }
-          break;
-      case(1):
-          if(c == A){
-              res[state] = c;
-              state++;
-          }
-          else state = 0;
-          break;
-      case(2):
-          if(c == C){
-              res[state] = c;
-              state++;
-          }
-          else state = 0;
-          break;
-      case(3):
-          if(c == res[1]^res[2]){
-              res[state] = c;
-              state++;
-          }
-          else state = 0;
-          break;
-      case(4):
-          if(c == FLAG){
-              res[state] = c;
-              state++;
-          }
-          else state = 0;
-          break;
-      }
-  }
+    sleep(1);
+    getResponse();
 
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
