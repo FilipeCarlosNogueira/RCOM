@@ -21,64 +21,69 @@
 
 int fd;
 unsigned char set[5];
-unsigned char resp[5];
-unsigned char c;
-char res[5];
-int state = 0;
-volatile int STOP=FALSE;
+unsigned char response[5];
 
 int stateMachine(char c, int state){
     switch(state) {
         case(0):
+        printf("ola\n");
             if(c == FLAG){
-                res[state] = c;
+                response[state] = c;
                 state++;
             }
+            return state;
         break;
         case(1):
             if(c == A){
-                res[state] = c;
+                response[state] = c;
                 state++;
             }
-            else state = 0;
+            return state;
         break;
         case(2):
             if(c == C){
-                res[state] = c;
+                response[state] = c;
                 state++;
             }
-            else state = 0;
+            else if(c == FLAG) state--;
+
+            return state;
         break;
         case(3):
-            if(c == res[1]^res[2]){
-                res[state] = c;
+            if(c == set[3]){
+                response[state] = c;
                 state++;
             }
-            else state = 0;
+            return state;
         break;
         case(4):
             if(c == FLAG){
-                res[state] = c;
+                response[state] = c;
                 state++;
             }
-            else state = 0;
+            return state;
+        break;
+        default:
+          return state;
         break;
     }
-
-    return state;
 }
 
 //Response state machine
 void getResponse(){
-    while(state != 5){
-        if(read(fd, &c, 1) < 0){
-            perror("read failed!");
-            exit(-1);
-        }
+  int state = 0;
+  char c;
 
-       state = stateMachine(c, state);
-       printf("Response: %x\n", res);
-    }
+  while(state != 5){
+      if(read(fd, &c, 1) < 0){
+          perror("read failed!");
+          exit(-1);
+      }
+      printf("c: %x\n", c);
+
+     state = stateMachine(c, state);
+     printf("state: %d\n", state);
+  }
 }
 
 //Set and Write
@@ -149,11 +154,12 @@ int main(int argc, char** argv)
 	//SET AND WRITE
     printf("Sendind message!\n");
     setWrite();
-    printf("Message: %x\n", set);
+    printf("Message sent: %x, %x, %x, %x, %x\n", set[0], set[1], set[2], set[3], set[4]);
 
 	//reads response from other machine
     sleep(1);
     getResponse();
+    printf("Response: %x, %x, %x, %x, %x\n", response[0], response[1], response[2], response[3], response[4]);
 
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
