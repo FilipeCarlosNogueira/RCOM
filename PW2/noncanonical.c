@@ -94,14 +94,10 @@ void getMessage(){
   while (!condition) {       /* loop for input */
 
     res = read(fd,&aux, 1);   /* reads one character at a time */
-    printf("%X\n", aux);
 
     state = stateMachine(aux, state);
-
     if(state == 5) condition=true;
   }
-
-  printf("Message: %x, %x, %x, %x, %x\n", message[0], message[1], message[2], message[3], message[4]);
 }
 
 int main(int argc, char** argv)
@@ -158,12 +154,20 @@ int main(int argc, char** argv)
     //get message from emissor
     getMessage();
 
+    // Writes message received
+    printf("Message: %x, %x, %x, %x, %x\n", message[0], message[1], message[2], message[3], message[4]);
+
     //UA array
     UA[0]=FLAG;
     UA[1]=A;
     UA[2]=C;
     UA[3]=UA[1] ^ UA[2];
     UA[4]= FLAG;
+
+    // Send response
+    tcflush(fd, TCIOFLUSH);
+    sleep(1);
+    write(fd, UA, 5);
 
   /*
     O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
