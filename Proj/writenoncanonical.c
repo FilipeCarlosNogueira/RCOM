@@ -45,6 +45,8 @@
 
 #define defined_size_packet 100
 
+#define C_header 0x01
+
 struct termios oldtio, newtio;
 
 int alarm_counter = 0;
@@ -52,8 +54,8 @@ int alarm_flag = FALSE;
 int STOP = FALSE;
 int trama = 0;
 int total_tramas = 0;
-unsigned char set[5];
-unsigned char response[5];
+
+unsigned char msg_counter = 0;
 
 void UA_statemachine(int *state, unsigned char *c)
 {
@@ -327,6 +329,24 @@ unsigned char *split_msg(unsigned char *msg, off_t *index, int *size_packet, off
   return packet;
 }
 
+unsigned char* header(unsigned char* msg, off_t file_size, int* packet_size)
+{
+	unsigned char* final_msg = (unsigned char*)malloc(file_size + 4);
+
+	final_msg[0] = C_header;
+	final_msg[1] = msg_counter % 255;
+	final_msg[2] = (int)file_size / 256;
+	final_msg[3] = (int)file_size % 256;
+
+	memcpy(final_msg + 4, msg, *packet_size);
+	*packet_size += 4;
+
+	msg_counter++;
+	total_tramas++;
+
+	return final_msg;
+}
+
 int llopen(int fd, int x)
 {
   unsigned char c;
@@ -568,7 +588,7 @@ int main(int argc, char** argv)
     printf("Sent packet number %d\n", total_tramas);
   
     int header_size = size_packet;
-    unsigned char *header_msg = headerAL(packet, file_size, &header_size);
+    unsigned char *header_msg = header(packet, file_size, &header_size);
     
     if (!llwrite(fd, header_msg, header_size))
     {
