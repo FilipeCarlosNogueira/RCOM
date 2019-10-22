@@ -26,6 +26,7 @@
 #define C_REJ0 0x01
 #define C_REJ1 0x81
 #define C2_end 0x03
+#define DISC 0x0B
 
 #define esc 0x7D
 #define esc_flag 0x5E
@@ -41,20 +42,6 @@ int test = 0;
 char res;
 char message[5];
 unsigned char UA[5];*/
-
-void getMessage() {
-	int state = 0;
-	bool condition = false;
-	char aux;
-
-	while (!condition) {       /* loop for input */
-
-		res = read(fd, &aux, 1);   /* reads one character at a time */
-
-		state = stateMachine(aux, state);
-		if (state == 5) condition = true;
-	}
-}
 
 unsigned char read_SET(int fd, unsigned char c_set)
 {
@@ -205,6 +192,18 @@ unsigned char* remove_header(unsigned char* remove, int remove_size, int* remove
 	*removed_size = remove_size - 4;
 
 	return msg_removed_header;
+}
+
+void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[])
+{
+	FILE* file = fopen((char*)filename, "wb+");
+
+	fwrite((void*)msg, 1, *file_size, file);
+
+	printf("%zd\n", *file_size);
+	printf("New file generated!\n");
+
+	fclose(file);
 }
 
 int llopen(int fd)
@@ -375,6 +374,22 @@ unsigned char* llread(int fd, int* msg_size)
 	return msg;
 }
 
+void llclose(int fd)
+{
+	read_SET(fd, DISC);
+	printf("DISC received...\n");
+
+	send_SET(fd, DISC);
+	printf("Sent DISC...\n");
+
+	read_SET(fd, C_UA);
+	printf("UA received...\n");
+
+	printf("Receiver terminated!\n");
+
+	tcsetattr(fd, TCSANOW, &oldtio);
+}
+
 int main(int argc, char** argv)
 {
 	int fd;
@@ -436,6 +451,21 @@ int main(int argc, char** argv)
 		index += noHeader_size;
 	}
 
+	printf("Message: \n");
+
+	int i = 0;
+	while(i < file_size)
+	{
+		printf("%x", file[i]);
+		i++;
+	}
+
+	new_file(file, &file_size, filename);
+
+	llclose(fd);
+	sleep(1);
+
+	close(fd);
 	
 	return 0;
 }
