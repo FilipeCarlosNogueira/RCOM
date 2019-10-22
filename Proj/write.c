@@ -21,6 +21,8 @@
 #define C 0x03
 
 int fd;
+struct termios oldtio,newtio;
+
 unsigned char set[5];
 unsigned char response[5];
 
@@ -81,7 +83,6 @@ int stateMachine(char c, int state){
 
 /*
 * While loop to get response from Receptor
-* @param 
 * return bool
 */
 bool getResponse(){
@@ -126,26 +127,16 @@ void setWrite(){
 	write(fd, set, 5);
 }
 
-int main(int argc, char** argv)
-{
-    struct termios oldtio,newtio;
-    char buf[255];
-    int i, sum = 0, speed = 0;
-
-    if ( (argc < 2) ||
-  	    //  ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-  	    //   (strcmp("/dev/ttyS1", argv[1])!=0) )) {
-          ((strcmp("/tmp/rcom0", argv[1])!=0) &&
-  	      (strcmp("/tmp/rcom1", argv[1])!=0) )) {
-      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-      exit(1);
-    }
-
-
-  /*
-    Open serial port device for reading and writing and not as controlling tty
-    because we don't want to get killed if linenoise sends CTRL-C.
-  */
+/*
+* Opens serial port.
+* Builds termios 
+* @param **argv
+*/
+void setTermios(char **argv){
+    /*
+        Open serial port device for reading and writing and not as controlling tty
+        because we don't want to get killed if linenoise sends CTRL-C.
+    */
 
     fd = open(argv[1], O_RDWR | O_NOCTTY );
     if (fd <0) {perror(argv[1]); exit(-1); }
@@ -167,10 +158,10 @@ int main(int argc, char** argv)
     newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 chars received */
 
 
-  /*
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
+    /*
+        VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+        leitura do(s) pr�ximo(s) caracter(es)
+    */
 
     tcflush(fd, TCIOFLUSH);
 
@@ -180,9 +171,14 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
+}
 
-    // Alarm handler
-    (void) signal(SIGALRM, timeOutHandler);
+/* ----------------- Data link Layer ----------------- */
+
+/*
+*
+*/
+int llopen(){
 
 	while(alarmCounter < 3) {
 		if (alarmFlag) {
@@ -202,15 +198,60 @@ int main(int argc, char** argv)
         }
 	}
 
-  /*
-    O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
-    o indicado no gui�o
-  */
+    if(alarmCounter == 3) return false;
 
+    return 1;
+}
+
+/*
+*
+*/
+int llclose(){
     if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
       perror("tcsetattr");
       exit(-1);
     }
+
+    return 1;
+}
+
+/* ----------------- Main ----------------- */
+int main(int argc, char** argv)
+{
+    char buf[255];
+    int i, sum = 0, speed = 0;
+
+    #ifdef UNIX
+        if ( (argc < 2) ||
+             ((strcmp("/dev/ttyS0", argv[1])!=0) &&
+              (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+        exit(1);
+        }
+    #elif __APPLE__
+        if ( (argc < 2) ||
+            ((strcmp("/tmp/rcom0", argv[1])!=0) &&
+            (strcmp("/tmp/rcom1", argv[1])!=0) )) {
+        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+        exit(1);
+        }
+    #endif
+
+    setTermios(argv);
+
+    // Alarm handler
+    (void) signal(SIGALRM, timeOutHandler);
+
+    // Establecimento
+    if(!llopen()){
+        perror("Control SET failed!");
+        exit(-1);
+    }
+
+    // Transferência de dados
+
+    // Terminação
+    llclose();
 
     close(fd);
     return 0;

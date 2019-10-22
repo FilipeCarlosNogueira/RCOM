@@ -50,7 +50,8 @@ unsigned char read_SET(int fd, unsigned char c_set)
 
 	while (state != 5)
 	{
-		read(fd, &c, 1);
+		if(read(fd, &c, 1) > 0)
+			printf("c: %x\n", c);
 		switch (state)
 		{
 		case 0: //analises flag
@@ -200,7 +201,7 @@ void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[])
 
 	fwrite((void*)msg, 1, *file_size, file);
 
-	printf("%zd\n", *file_size);
+	printf("%lld\n", *file_size);
 	printf("New file generated!\n");
 
 	fclose(file);
@@ -402,10 +403,10 @@ int main(int argc, char** argv)
 	off_t index = 0;
 
 	if ((argc < 2) ||
-		((strcmp("/dev/ttyS0", argv[1])!=0) &&
-		 (strcmp("/dev/ttyS1", argv[1])!=0) )) {
-		//((strcmp("/tmp/rcom0", argv[1]) != 0) &&
-		//(strcmp("/tmp/rcom1", argv[1]) != 0))) {
+		//((strcmp("/dev/ttyS0", argv[1])!=0) &&
+		 //(strcmp("/dev/ttyS1", argv[1])!=0) )) {
+		((strcmp("/tmp/rcom0", argv[1]) != 0) &&
+		(strcmp("/tmp/rcom1", argv[1]) != 0))) {
 		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
 		exit(1);
 	}

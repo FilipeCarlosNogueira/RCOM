@@ -50,7 +50,7 @@
 struct termios oldtio, newtio;
 
 int alarm_counter = 0;
-int alarm_flag = FALSE;
+int alarm_flag = TRUE;
 int STOP = FALSE;
 int trama = 0;
 int total_tramas = 0;
@@ -202,7 +202,7 @@ unsigned char *open_file(unsigned char *file_name, off_t *file_size)
   stat((char *)file_name, &data);
   (*file_size) = data.st_size;
 
-  printf("This file has %ld bytes \n", *file_size);
+  printf("This file has %lld bytes \n", *file_size);
 
   file_data = (unsigned char *)malloc(*file_size);
 
@@ -543,8 +543,10 @@ int main(int argc, char** argv)
   struct timespec clock_start, clock_end;
 
   if ( (argc < 2) ||
-       ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-        (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+      //  ((strcmp("/dev/ttyS0", argv[1])!=0) &&
+      //   (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+        ((strcmp("/tmp/rcom0", argv[1]) != 0) &&
+		(strcmp("/tmp/rcom1", argv[1]) != 0))) {
     printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
     exit(1);
   }

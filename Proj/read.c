@@ -22,10 +22,17 @@
 volatile int STOP=FALSE;
 
 int fd;
+struct termios oldtio,newtio;
+
 char res;
 char message[5];
 unsigned char UA[5];
 
+/*
+* Emissor message state machine
+* @param aux, state
+* return state
+*/
 int stateMachine(char aux, int state){
   switch(state){
       case 0:
@@ -87,6 +94,9 @@ int stateMachine(char aux, int state){
   return -1;
 }
 
+/*
+* While loop to get message from Emissor
+*/
 void getMessage(){
   int state=0;
   bool condition=false;
@@ -101,21 +111,13 @@ void getMessage(){
   }
 }
 
-int main(int argc, char** argv)
-{
-    struct termios oldtio,newtio;
-    char buf[255];
-
-    if ( (argc < 2) ||
-  	    //  ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-  	    //   (strcmp("/dev/ttyS1", argv[1])!=0) )) {
-          ((strcmp("/tmp/rcom0", argv[1])!=0) &&
-  	      (strcmp("/tmp/rcom1", argv[1])!=0) )) {
-      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-      exit(1);
-    }
-
-  /*
+/*
+* Opens serial port.
+* Builds termios 
+* @param **argv
+*/
+void setTermios(char **argv){
+    /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
@@ -153,7 +155,14 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
+}
 
+/* ----------------- Data link Layer ----------------- */
+
+/*
+*
+*/
+bool llopen(){
     //get message from emissor
     sleep(1);
     getMessage();
@@ -171,20 +180,60 @@ int main(int argc, char** argv)
     // Send response
     tcflush(fd, TCIOFLUSH);
 
+    /*
     // Auxiliar sleep
     printf("sleeping\n");
     sleep(4);
     printf("not sleeping\n");
+    */
 
     // Write response to Emissor
     write(fd, UA, 5);
     printf("Response: %x, %x, %x, %x, %x\n", UA[0], UA[1], UA[2], UA[3], UA[4]);
 
-  /*
-    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
-  */
+    return true;
+}
 
+/*
+*
+*/
+bool llclose(){
     tcsetattr(fd,TCSANOW,&oldtio);
+
+    return true;
+}
+
+/* ----------------- Main ----------------- */
+int main(int argc, char** argv)
+{
+    char buf[255];
+
+    #ifdef UNIX
+        if ( (argc < 2) ||
+             ((strcmp("/dev/ttyS0", argv[1])!=0) &&
+              (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+        exit(1);
+        }
+    #elif __APPLE__
+        if ( (argc < 2) ||
+            ((strcmp("/tmp/rcom0", argv[1])!=0) &&
+            (strcmp("/tmp/rcom1", argv[1])!=0) )) {
+        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+        exit(1);
+        }
+    #endif
+
+    setTermios(argv);
+
+    // Establecimento
+    llopen();
+
+    // Transferência de dados
+
+    // Terminação
+    llclose();
+
     close(fd);
     return 0;
 }
