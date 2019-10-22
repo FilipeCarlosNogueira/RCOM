@@ -51,7 +51,7 @@ unsigned char read_SET(int fd, unsigned char c_set)
 	while (state != 5)
 	{
 		if(read(fd, &c, 1) > 0)
-			printf("c: %x\n", c);
+			//printf("c: %x\n", c);
 		switch (state)
 		{
 		case 0: //analises flag
