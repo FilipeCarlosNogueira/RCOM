@@ -1,4 +1,4 @@
-/*Non-Canonical Input Processing*/
+﻿/*Non-Canonical Input Processing*/
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,205 +10,104 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#define BAUDRATE B38400
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
+#include "utils.h"
+#include "dataLink.h"
 
-#define FLAG 0x7e
-#define A 0x03
-#define C 0x03
+/* ----------------- Application Layer ---------------- */
 
-volatile int STOP=FALSE;
+unsigned char* start_filename(unsigned char* start)
+{
+	int auxL2 = (int)start[8];
+	unsigned char* name = (unsigned char*)malloc(auxL2 + 1);
 
-int fd;
-struct termios oldtio,newtio;
+	int i;
 
-char res;
-char message[5];
-unsigned char UA[5];
+	for (i = 0; i < auxL2; i++)
+	{
+		name[i] = start[9 + i];
+	}
 
-/*
-* Emissor message state machine
-* @param aux, state
-* return state
-*/
-int stateMachine(char aux, int state){
-  switch(state){
-      case 0:
-          if(aux==FLAG){
-            message[state] = aux;
-            state++;
-            return state;
-          }
-          else return state;
-      break;
+	name[auxL2] = '\0';
 
-      case 1:
-          if(aux==A){
-            message[state] = aux;
-            state++;
-            return state;
-          }
-          else return state;
-      break;
-
-      case 2:
-          if(aux==C){
-            message[state] = aux;
-            state++;
-            return state;
-          }
-          else if(aux==FLAG){
-              state--;
-              return state;
-          }
-      break;
-
-      case 3:
-          if(aux==UA[3]){
-            message[state] = aux;
-            state++;
-            return state;
-          }
-          else return state;
-      break;
-
-      case 4:
-          if(aux==FLAG){
-            message[state] = aux;
-            state++;
-            return state;
-          }
-          else return state;
-      break;
-
-      case 5:
-          return state;
-      break;
-
-      default:
-        return state;
-      break;
-  }
-  return -1;
+	return name;
 }
 
-/*
-* While loop to get message from Emissor
-*/
-void getMessage(){
-  int state=0;
-  bool condition=false;
-  char aux;
-
-  while (!condition) {       /* loop for input */
-
-    res = read(fd,&aux, 1);   /* reads one character at a time */
-
-    state = stateMachine(aux, state);
-    if(state == 5) condition=true;
-  }
+off_t start_file_size(unsigned char* start)
+{
+	return (start[3] << 24) | (start[4] << 16) | (start[5] << 8) | (start[6]);
 }
 
-/*
-* Opens serial port.
-* Builds termios 
-* @param **argv
-*/
-void setTermios(char **argv){
-    /*
-    Open serial port device for reading and writing and not as controlling tty
-    because we don't want to get killed if linenoise sends CTRL-C.
-  */
+int final_msg_check(unsigned char* start, int start_size, unsigned char* final, int final_size)
+{
+	int s = 1;
+	int f = 1;
 
-    fd = open(argv[1], O_RDWR | O_NOCTTY );
-    if (fd <0) {perror(argv[1]); exit(-1); }
+	if (start_size != final_size)
+		return FALSE;
+	else
+	{
+		if (final[0] == C2_end)
+		{
+			while(s < start_size)
+			{
+				if (start[s] != final[f])
+					return FALSE;
 
-    if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
-      perror("tcgetattr");
-      exit(-1);
-    }
-
-    bzero(&newtio, sizeof(newtio));
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
-
-    /* set input mode (non-canonical, no echo,...) */
-    newtio.c_lflag = 0;
-
-    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
-
-
-  /*
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
-
-    tcflush(fd, TCIOFLUSH);
-
-    if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
-      perror("tcsetattr");
-      exit(-1);
-    }
-
-    printf("New termios structure set\n");
+				s++;
+				f++;
+			}
+			return TRUE;
+		}
+		else
+			return FALSE;
+	}
 }
 
-/* ----------------- Data link Layer ----------------- */
+unsigned char* remove_header(unsigned char* remove, int remove_size, int* removed_size)
+{
+	int i = 0;
+	int j = 4;
 
-/*
-*
-*/
-bool llopen(){
-    //get message from emissor
-    sleep(1);
-    getMessage();
+	unsigned char* msg_removed_header = (unsigned char*)malloc(remove_size - 4);
 
-    // Writes message received
-    printf("Message: %x, %x, %x, %x, %x\n", message[0], message[1], message[2], message[3], message[4]);
+	while(i < remove_size)
+	{
+		msg_removed_header[i] = remove[j];
 
-    //UA array
-    UA[0]=FLAG;
-    UA[1]=A;
-    UA[2]=C;
-    UA[3]=UA[1] ^ UA[2];
-    UA[4]= FLAG;
+		i++;
+		j++;
+	}
 
-    // Send response
-    tcflush(fd, TCIOFLUSH);
+	*removed_size = remove_size - 4;
 
-    /*
-    // Auxiliar sleep
-    printf("sleeping\n");
-    sleep(4);
-    printf("not sleeping\n");
-    */
-
-    // Write response to Emissor
-    write(fd, UA, 5);
-    printf("Response: %x, %x, %x, %x, %x\n", UA[0], UA[1], UA[2], UA[3], UA[4]);
-
-    return true;
+	return msg_removed_header;
 }
 
-/*
-*
-*/
-bool llclose(){
-    tcsetattr(fd,TCSANOW,&oldtio);
+void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[])
+{
+	FILE* file = fopen((char*)filename, "wb+");
 
-    return true;
+	fwrite((void*)msg, 1, *file_size, file);
+
+	printf("%lld\n", *file_size);
+	printf("New file generated!\n");
+
+	fclose(file);
 }
 
 /* ----------------- Main ----------------- */
 int main(int argc, char** argv)
 {
-    char buf[255];
+	int fd;
+	int msg_size = 0;
+	unsigned char* msg_ready;
+	int start_size = 0;
+	unsigned char* start;
+	off_t file_size = 0;
+	unsigned char* file;
+	off_t index = 0;
 
-    #ifdef UNIX
+	#ifdef UNIX
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
               (strcmp("/dev/ttyS1", argv[1])!=0) )) {
@@ -219,21 +118,69 @@ int main(int argc, char** argv)
         if ( (argc < 2) ||
             ((strcmp("/tmp/rcom0", argv[1])!=0) &&
             (strcmp("/tmp/rcom1", argv[1])!=0) )) {
-        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/rcom0\n");
         exit(1);
         }
     #endif
 
-    setTermios(argv);
+	/*
+	  Open serial port device for reading and writing and not as controlling tty
+	  because we don't want to get killed if linenoise sends CTRL-C.
+	*/
 
-    // Establecimento
-    llopen();
+	fd = open(argv[1], O_RDWR | O_NOCTTY);
+	if (fd < 0) { perror(argv[1]); exit(-1); }
 
-    // Transferência de dados
+	/*
+	if (tcgetattr(fd, &oldtio) == -1) { // save current port settings
+		perror("tcgetattr");
+		exit(-1);
+	}
+	*/
 
-    // Terminação
-    llclose();
+	llopen(fd, RECEIVER);
 
-    close(fd);
-    return 0;
+	start = llread(fd, &start_size);
+
+	unsigned char* filename = start_filename(start);
+	file_size = start_file_size(start);
+
+	file = (unsigned char*)malloc(file_size);
+
+	while (TRUE)
+	{
+		msg_ready = llread(fd, &msg_size);
+		if (msg_size == 0)
+			continue;
+		if (final_msg_check(start, start_size, msg_ready, msg_size))
+		{
+			printf("Final message received!\n");
+			break;
+		}
+
+		int noHeader_size = 0;
+
+		msg_ready = remove_header(msg_ready, msg_size, &noHeader_size);
+
+		memcpy(file + index, msg_ready, noHeader_size);
+		index += noHeader_size;
+	}
+
+	printf("Message: \n");
+
+	int i = 0;
+	while(i < file_size)
+	{
+		printf("%x", file[i]);
+		i++;
+	}
+
+	new_file(file, &file_size, filename);
+
+	llclose(fd, RECEIVER);
+	sleep(1);
+
+	close(fd);
+	
+	return 0;
 }
