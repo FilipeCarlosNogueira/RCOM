@@ -131,12 +131,7 @@ int main(int argc, char** argv)
 	fd = open(argv[1], O_RDWR | O_NOCTTY);
 	if (fd < 0) { perror(argv[1]); exit(-1); }
 
-	/*
-	if (tcgetattr(fd, &oldtio) == -1) { // save current port settings
-		perror("tcgetattr");
-		exit(-1);
-	}
-	*/
+	setTermios(fd);
 
 	llopen(fd, RECEIVER);
 

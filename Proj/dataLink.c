@@ -86,7 +86,7 @@ void send_SET(int fd, unsigned char c)
     printf("Message sent: %x, %x, %x, %x, %x\n", set[0], set[1], set[2], set[3], set[4]);
 }
 
-bool read_SET_R(int fd, unsigned char c_set){
+bool read_SET(int fd, unsigned char c_set){
     
     int state=0;
     char c = 0;
@@ -154,11 +154,7 @@ bool read_SET_R(int fd, unsigned char c_set){
     return true;
 }
 
-int llopen(int fd, int mode)
-{
-    //unsigned char c;
-
-    setTermios(fd);
+int llopen(int fd, int mode){
 
     // Transmitter
     if(mode){
@@ -173,7 +169,7 @@ int llopen(int fd, int mode)
             }
 
             //reads response from Receptor
-            if(read_SET_R(fd, C_UA)) break;
+            if(read_SET(fd, C_UA)) break;
 	    }
 
         if(alarm_counter == 3) return 0;
@@ -182,7 +178,7 @@ int llopen(int fd, int mode)
     else {
         bool result;
         do{
-            result = read_SET_R(fd, C);
+            result = read_SET(fd, C);
         }while(!result);
         
         printf("SET received!\n");
@@ -202,11 +198,11 @@ int llclose(int fd, int mode){
         send_SET(fd, DISC);
         printf("DISC sent...\n");
 
-        c = read_SET(fd);
+        c = read_SET_W(fd);
 
         while (c != DISC)
         {
-            c = read_SET(fd);
+            c = read_SET_W(fd);
         }
 
         printf("DISC read...\n");
@@ -217,13 +213,13 @@ int llclose(int fd, int mode){
     }
     // Receiver
     else{
-        read_SET_R(fd, DISC);
+        read_SET(fd, DISC);
         printf("DISC received...\n");
 
         send_SET(fd, DISC);
         printf("Sent DISC...\n");
 
-        read_SET_R(fd, C_UA);
+        read_SET(fd, C_UA);
         printf("UA received...\n");
 
         printf("Receiver terminated!\n");
@@ -238,7 +234,7 @@ int llclose(int fd, int mode){
 }
 
 // WRITE
-unsigned char read_SET(int fd)
+unsigned char read_SET_W(int fd)
 {
   int state = 0;
   unsigned char c;
@@ -440,7 +436,7 @@ int llwrite(int fd, unsigned char *msg, int size)
 
     alarm_flag = FALSE;
     alarm(TIMEOUT);
-    unsigned char c = read_SET(fd);
+    unsigned char c = read_SET_W(fd);
     if ((c == C_RR1 && trama == 0) || (c == C_RR0 && trama == 1))
     {
       printf("Recebeu rr %x -> trama = %d\n", c, trama);

@@ -153,6 +153,8 @@ int main(int argc, char** argv)
 
   clock_gettime(CLOCK_REALTIME, &clock_start); //start clock
 
+  setTermios(fd);
+  
   if (!llopen(fd, TRANSMITTER))
   {
     perror("Connection failed!");

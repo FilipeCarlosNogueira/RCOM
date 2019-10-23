@@ -13,14 +13,14 @@ void alarm_handler();
 void setTermios(int fd);
 
 void send_SET(int fd, unsigned char c);
-bool read_SET_R(int fd, unsigned char c_set);
+bool read_SET(int fd, unsigned char c_set);
 
 int llopen(int fd, int x);
 int llclose(int fd, int mode);
 
 // WRITE
 
-unsigned char read_SET(int fd);
+unsigned char read_SET_W(int fd);
 unsigned char *change_BCC1(unsigned char *packet, int size_packet);
 unsigned char *change_BCC2(unsigned char *packet, int size_packet);
 unsigned char calc_BCC2(unsigned char *msg, int size);
