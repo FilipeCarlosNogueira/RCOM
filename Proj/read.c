@@ -80,13 +80,8 @@ int main(int argc, char** argv)
 	}
 
 	printf("Message: \n");
-
-	int i = 0;
-	while(i < file_size)
-	{
+	for(int i = 0; i < file_size; ++i)
 		printf("%x", file[i]);
-		i++;
-	}
 
 	new_file(file, &file_size, filename);
 

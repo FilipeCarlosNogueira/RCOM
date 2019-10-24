@@ -25,21 +25,20 @@ int main(int argc, char** argv){
   struct timespec clock_start, clock_end;
 
   #ifdef UNIX
-        if ( (argc < 2) ||
-              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-              (strcmp("/dev/ttyS1", argv[1])!=0) )) {
-        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-        exit(1);
-        }
-    #elif __APPLE__
-        if ( (argc < 2) ||
-            ((strcmp("/tmp/rcom0", argv[1])!=0) &&
-            (strcmp("/tmp/rcom1", argv[1])!=0) )) {
-        printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/rcom0\n");
-        exit(1);
-        }
-    #endif
-
+    if ( (argc < 2) ||
+          ((strcmp("/dev/ttyS0", argv[1])!=0) &&
+          (strcmp("/dev/ttyS1", argv[1])!=0) )) {
+    printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+    exit(1);
+    }
+  #elif __APPLE__
+    if ( (argc < 2) ||
+        ((strcmp("/tmp/rcom0", argv[1])!=0) &&
+        (strcmp("/tmp/rcom1", argv[1])!=0) )) {
+    printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/rcom0\n");
+    exit(1);
+    }
+  #endif
 
   /*
     Open serial port device for reading and writing and not as controlling tty
@@ -66,8 +65,14 @@ int main(int argc, char** argv){
 
   int size_file_name = strlen(argv[2]);
   int size_control_package = 0;
+
   unsigned char *file_name = (unsigned char *)malloc(size_file_name);
+  if(file_name == NULL){
+    perror("file_name malloc failed!");
+    exit(-1);
+  }
   file_name = (unsigned char *)argv[2];
+
   unsigned char *start = control_package(C2_start, file_size, file_name, size_file_name, &size_control_package);
 
   llwrite(fd, start, size_control_package);
