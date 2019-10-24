@@ -20,7 +20,6 @@ bool alarm_flag = TRUE;
 int test = 0;
 
 int trama = 0;
-int total_tramas = 0;
 
 /*
 * Alarm handler funtion
@@ -70,6 +69,10 @@ void setTermios(int fd){
     printf("New termios structure set\n");
 }
 
+/*
+* Creates SET and writes to receptor
+* @param fd, c
+*/
 void send_SET(int fd, unsigned char c)
 {
     unsigned char set[5];
@@ -86,6 +89,9 @@ void send_SET(int fd, unsigned char c)
     printf("Message sent: %x, %x, %x, %x, %x\n", set[0], set[1], set[2], set[3], set[4]);
 }
 
+/*
+*
+*/
 bool read_SET(int fd, unsigned char c_set){
     
     int state=0;
@@ -154,16 +160,18 @@ bool read_SET(int fd, unsigned char c_set){
     return true;
 }
 
+/*
+*
+*/
 int llopen(int fd, int mode){
 
     // Transmitter
     if(mode){
        while(alarm_counter < 3) {
             if (alarm_flag) {
-                //SET and writes to receptor
+
                 send_SET(fd, C);
 
-                printf("olaa\n");
                 alarm(TIMEOUT);
                 alarm_flag = FALSE;
             }
@@ -189,6 +197,9 @@ int llopen(int fd, int mode){
     return 1;
 }
 
+/*
+*
+*/
 int llclose(int fd, int mode){
 
     unsigned char c;
@@ -233,7 +244,8 @@ int llclose(int fd, int mode){
     return 1;
 }
 
-// WRITE
+/* --------- WRITE --------- */
+
 unsigned char read_SET_W(int fd)
 {
   int state = 0;
@@ -463,7 +475,8 @@ int llwrite(int fd, unsigned char *msg, int size)
 }
 
 
-// READ
+/* --------- READ --------- */
+
 int BCC2_test(unsigned char* msg, int msg_size)
 {
 	int i = 1;

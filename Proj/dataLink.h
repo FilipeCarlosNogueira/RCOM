@@ -7,8 +7,6 @@ extern struct termios oldtio, newtio;
 extern int alarm_counter;
 extern bool alarm_flag;
 
-extern int total_tramas;
-
 void alarm_handler();
 void setTermios(int fd);
 
