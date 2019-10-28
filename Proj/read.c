@@ -10,21 +10,13 @@
 #include <stdbool.h>
 #include <unistd.h>
 
+#include "macros.h"
 #include "utils.h"
 #include "dataLink.h"
 #include "application.h"
 
 int main(int argc, char** argv)
 {
-	int fd;
-	int msg_size = 0;
-	unsigned char* msg_ready;
-	int start_size = 0;
-	unsigned char* start;
-	off_t file_size = 0;
-	unsigned char* file;
-	off_t index = 0;
-
 	#ifdef UNIX
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -41,6 +33,15 @@ int main(int argc, char** argv)
         }
     #endif
 
+	int fd;
+	int msg_size = 0;
+	unsigned char* msg_ready;
+	int start_size = 0;
+	unsigned char* start;
+	off_t file_size = 0;
+	unsigned char* file;
+	off_t index = 0;
+
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
 	  because we don't want to get killed if linenoise sends CTRL-C.
@@ -51,7 +52,15 @@ int main(int argc, char** argv)
 
 	setTermios(fd);
 
-	llopen(fd, RECEIVER);
+	/* --- Data connection establishment --- */
+	printf("\n*Data connection establishment*\n");
+	if (!llopen(fd, RECEIVER)){
+		perror("Connection failed!");
+		return -1;
+	}
+
+	/* --- Data transference --- */
+	printf("*Data transference*\n");
 
 	start = llread(fd, &start_size);
 
@@ -79,13 +88,21 @@ int main(int argc, char** argv)
 		index += noHeader_size;
 	}
 
-	printf("Message: \n");
+	printf("Message: ");
 	for(int i = 0; i < file_size; ++i)
 		printf("%x", file[i]);
+	printf("\n");
 
+	printf("\n*New file*\n");
 	new_file(file, &file_size, filename);
+	printf("New file name: %s\n", filename);
+	printf("New file size: %lld\n", file_size);
 
+	/* --- Termination --- */
+	printf("\n*Termination*\n");
 	llclose(fd, RECEIVER);
+
+	printf("\nReceiver terminated!\n");
 	
 	sleep(1);
 

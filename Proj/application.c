@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "utils.h"
+#include "macros.h"
 #include "application.h"
 
 unsigned char msg_counter = 0;
@@ -16,56 +16,42 @@ int total_tramas = 0;
 
 /* --------- Write --------- */
 
-unsigned char *open_file(unsigned char *file_name, off_t *file_size)
-{
-  FILE *f;
-  struct stat data;
-  unsigned char *file_data;
-
-  if ((f = fopen((char *)file_name, "rb")) == NULL)
-  {
-    perror("Error opening file!");
-    exit(-1);
-  }
-
-  stat((char *)file_name, &data);
-  (*file_size) = data.st_size;
-
-  printf("This file has %lld bytes \n", *file_size);
-
-  file_data = (unsigned char *)malloc(*file_size);
-
-  fread(file_data, sizeof(unsigned char), *file_size, f);
-  
-  return file_data;
-}
-
+/*
+*
+*/
 unsigned char *control_package(unsigned char state, off_t file_size, unsigned char *file_name, int size_file_name, int *size_control_package)
 {
-  *size_control_package = 9 * sizeof(unsigned char) + size_file_name;
-  unsigned char *package = (unsigned char *)malloc(*size_control_package);
+	if(state != C2_start && state != C2_end){
+		perror("Controle package not recognised!");
+		exit(-1);
+	}
 
-  if (state == C2_start)
-    package[0] = C2_start;
-  else
-    package[0] = C2_end;
-  
-  package[1] = T1;
-  package[2] = L1;
-  package[3] = (file_size >> 24) & 0xFF;
-  package[4] = (file_size >> 16) & 0xFF;
-  package[5] = (file_size >> 8) & 0xFF;
-  package[6] = file_size & 0xFF;
-  package[7] = T2;
-  package[8] = size_file_name;
+	*size_control_package = 9 * sizeof(unsigned char) + size_file_name;
+	printf("%lu --\n", sizeof(unsigned char));
 
-  int i = 0;
-  while(i < size_file_name)
-  {
-    package[9 + i] = file_name[i];
-    i++;
-  }
-  return package;
+	unsigned char *package;
+	if((package = (unsigned char *)malloc(*size_control_package)) == NULL){
+	perror("Control package maaloc failed!");
+	exit(-1);
+	}
+
+	package[0] = state;
+	package[1] = T1;
+	package[2] = L1;
+	package[3] = (file_size >> 24) & 0xFF;
+	package[4] = (file_size >> 16) & 0xFF;
+	package[5] = (file_size >> 8) & 0xFF;
+	package[6] = file_size & 0xFF;
+	package[7] = T2;
+	package[8] = size_file_name;
+
+	int i = 0;
+	while(i < size_file_name)
+	{
+	package[9 + i] = file_name[i];
+	i++;
+	}
+	return package;
 }
 
 unsigned char *split_msg(unsigned char *msg, off_t *index, int *size_packet, off_t file_size)
@@ -177,16 +163,4 @@ unsigned char* remove_header(unsigned char* remove, int remove_size, int* remove
 	*removed_size = remove_size - 4;
 
 	return msg_removed_header;
-}
-
-void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[])
-{
-	FILE* file = fopen((char*)filename, "wb+");
-
-	fwrite((void*)msg, 1, *file_size, file);
-
-	printf("%lld\n", *file_size);
-	printf("New file generated!\n");
-
-	fclose(file);
 }
