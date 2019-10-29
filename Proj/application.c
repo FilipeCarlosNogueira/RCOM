@@ -27,7 +27,6 @@ unsigned char *control_package(unsigned char state, off_t file_size, unsigned ch
 	}
 
 	*size_control_package = 9 * sizeof(unsigned char) + size_file_name;
-	printf("%lu --\n", sizeof(unsigned char));
 
 	unsigned char *package;
 	if((package = (unsigned char *)malloc(*size_control_package)) == NULL){
