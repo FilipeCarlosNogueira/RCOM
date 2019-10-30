@@ -14,11 +14,6 @@
 #include "utils.h"
 #include "dataLink.h"
 
-int test = 0;
-
-int trama = 0;
-
-
 /*
 * Creates SET and writes to receptor
 * @param fd, c
@@ -36,7 +31,9 @@ void send_SET(int fd, unsigned char c){
 }
 
 /*
-*
+* Function used to analise the SET and UA packages
+* @param fd, c_set
+* @return TRUE if no errors / FALSE if errors
 */
 bool read_SET(int fd, unsigned char c_set){
     
@@ -107,7 +104,9 @@ bool read_SET(int fd, unsigned char c_set){
 }
 
 /*
-* 
+* Establishes the first connection. 
+* Transmitter sends SET
+* Receiver sends UA
 * @param fd: COM1, COM2, ...; mode: TRANSMITTER / RECEIVER
 * @return 1 in success; -1 in failure 
 */
@@ -151,7 +150,9 @@ int llopen(int fd, int mode){
 }
 
 /*
-*
+* Establishes the last connection
+* Transmitter sends 
+* 
 * @param fd: COM1, COM2, ... 
 * @param mode: TRANSMITTER / RECEIVER
 */
@@ -167,9 +168,7 @@ int llclose(int fd, int mode){
     c = read_SET_W(fd);
 
     while (c != DISC)
-    {
-        c = read_SET_W(fd);
-    }
+      c = read_SET_W(fd);
 
     printf("DISC read...\n");
 
@@ -198,8 +197,13 @@ int llclose(int fd, int mode){
 
 /* --------- WRITE --------- */
 
-unsigned char read_SET_W(int fd)
-{
+/*
+* State machine that interprets the Supervion Trama sent by the Receiver.
+* @param fd
+* @return C field of received trama
+*/
+unsigned char read_supervision_trama(int fd){
+  
   int state = 0;
   unsigned char c;
   unsigned char c1;
@@ -252,170 +256,225 @@ unsigned char read_SET_W(int fd)
       break;
     }
   }
+  
   return 0xFF;
 }
 
-unsigned char *change_BCC1(unsigned char *packet, int size_packet)
-{
-  unsigned char *copy = (unsigned char *)malloc(size_packet);
-  memcpy(copy, packet, size_packet);
-  int n = (rand() % 100) + 1;
-  if (n <= 0)
-  {
-    int i = (rand() % 3) + 1;
-    unsigned char letter = (unsigned char)('A' + (rand() % 26));
-    copy[i] = letter;
-    printf("BCC1 changed...\n");
-  }
-  return copy;
-}
+/*
+* The stuffing of the BCC occurs when the Flag or Escape byte are found. 
+* @param BCC2, *size_BCC2
+* @return stuffed_BCC2
+*/
+unsigned char *stuff_BCC2(unsigned char BCC2, int *size_BCC2){
 
-unsigned char *change_BCC2(unsigned char *packet, int size_packet)
-{
-  unsigned char *copy = (unsigned char *)malloc(size_packet);
-  memcpy(copy, packet, size_packet);
-  int n = (rand() % 100) + 1;
-  if (n <= 0)
-  {
-    int i = (rand() % (size_packet - 5)) + 4;
-    unsigned char letter = (unsigned char)('A' + (rand() % 26));
-    copy[i] = letter;
-    printf("BCC2 changed...\n");
-  }
-  return copy;
-}
-
-unsigned char calc_BCC2(unsigned char *msg, int size)
-{
-  unsigned char BCC2 = msg[0];
-  int i;
-
-  for (i = 1; i < size; i++)
-  {
-    BCC2 ^= msg[i];
-  }
-
-  return BCC2;
-}
-
-unsigned char *stuff_BCC2(unsigned char BCC2, int *size_BCC2)
-{
   unsigned char *stuffed_BCC2 = NULL;
-  if (BCC2 == FLAG)
-  {
-    stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *));
+  
+  /*
+  * Se no interior da trama ocorrer o octeto 01111110 (0x7e), 
+  * isto é, o padrão que corresponde a uma flag, o octeto é 
+  * substituído pela sequência 0x7d 0x5e (octeto de escape 
+  * seguido do resultado do ou exclusivo do octeto substituído 
+  * com o octeto0x20).
+  */
+  if (BCC2 == FLAG){
+    if((stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *))) == NULL){
+      perror("FLAG stuffed_BCC2 malloc failed!");
+      exit(-1);
+    }
     stuffed_BCC2[0] = esc;
     stuffed_BCC2[1] = esc_flag;
     (*size_BCC2)++;
   }
-  else
-  {
-    if (BCC2 == esc)
-    {
-      stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *));
-      stuffed_BCC2[0] = esc;
-      stuffed_BCC2[1] = esc_escape;
-      (*size_BCC2)++;
+
+  /*
+  * Se no interior da trama ocorrer o octeto 01111101 (0x7d), 
+  * isto é, o padrão que corresponde ao octeto de escape, o 
+  * octeto é substituído pela sequência 0x7d 0x5d (octeto de 
+  * escape seguido do resultado do ou exclusivo do octeto 
+  * substituído com o octeto 0x20).
+  */
+  else if (BCC2 == esc){
+    if((stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *))) == NULL){
+      perror("ESC stuffed_BCC2 malloc failed!");
+      exit(-1);
     }
+    stuffed_BCC2[0] = esc;
+    stuffed_BCC2[1] = esc_escape;
+    (*size_BCC2)++;
   }
 
   return stuffed_BCC2;
 }
 
-int llwrite(int fd, unsigned char *buffer, int length)
-{
-  unsigned char BCC2;
-  unsigned char *BCC2_stuffed = (unsigned char *)malloc(sizeof(unsigned char));
-  unsigned char *final_msg = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
-  int size_final_msg = length + 6;
-  int size_BCC2 = 1;
-  BCC2 = calc_BCC2(buffer, length);
-  BCC2_stuffed = stuff_BCC2(BCC2, &size_BCC2);
-  int flag = FALSE;
+/*
+* Na geração do BCC são considerados apenas os octetos originais 
+* (antes da operação de stuffing), mesmo que algum octeto 
+* (incluindo o próprio BCC) tenha de ser substituído pela 
+* correspondente sequência de escape.
+* @param *msg, size
+* @return BCC2
+*/
+unsigned char calc_BCC2(unsigned char *msg, int size){
+
+  unsigned char BCC2 = msg[0];
+
+  for (int i = 1; i < size; ++i)
+    BCC2 ^= msg[i];
+
+  return BCC2;
+}
+
+int trama = 0;
+/*
+* Builds a Information Trama respecting the Transparence specifications
+* @param *buffer, length, *size_inf_trama
+* @return *inf_trama
+*/
+unsigned char *build_information_trama(unsigned char *buffer, int length, int *size_inf_trama){
+  
+  unsigned char *inf_trama;
+  if((inf_trama = (unsigned char *)malloc((length + 6) * sizeof(unsigned char))) == NULL){
+    perror("llwrite inf_trama malloc failed!");
+    exit(-1);
+  }
+  *size_inf_trama = length + 6;
+
+  // F - FLAG
+  inf_trama[0] = FLAG;
+
+  // A - Address field
+  inf_trama[1] = A;
+
+  // C - Control field
+  if (trama == 0)
+    inf_trama[2] = C10;
+  else
+    inf_trama[2] = C11;
+
+  // BCC1 - Protection field - Head
+  inf_trama[3] = (inf_trama[1] ^ inf_trama[2]);
+
+  // D1 + Data + Dn
   int i = 0;
   int j = 4;
+  while(i < length){
 
-  final_msg[0] = FLAG;
-  final_msg[1] = A;
-
-  if (trama == 0)
-  {
-    final_msg[2] = C10;
-  }
-  else
-  {
-    final_msg[2] = C11;
-  }
-  final_msg[3] = (final_msg[1] ^ final_msg[2]);
-  
-  while(i < length)
-  {
-    if (buffer[i] == FLAG)
-    {
-      final_msg = (unsigned char *)realloc(final_msg, ++size_final_msg);
-      final_msg[j] = esc;
-      final_msg[j + 1] = esc_flag;
-      j = j + 2;
-    }
-    else
-    {
-      if (buffer[i] == esc)
-      {
-        final_msg = (unsigned char *)realloc(final_msg, ++size_final_msg);
-        final_msg[j] = esc;
-        final_msg[j + 1] = esc_escape;
-        j = j + 2;
+    if (buffer[i] == FLAG || buffer[i] == esc){
+      
+      if((inf_trama = (unsigned char *)realloc(inf_trama, ++*size_inf_trama)) == NULL){
+        perror("llwrite inf_trama realloc failed!");
+        exit(-1);
       }
-      else
-      {
-        final_msg[j] = buffer[i];
-        j++;
-      }
+      
+      inf_trama[j] = esc;
+      
+      /*
+      * Se no interior da trama ocorrer o octeto 01111110 (0x7e), 
+      * isto é, o padrão que corresponde a uma flag, o octeto é 
+      * substituído pela sequência 0x7d 0x5e (octeto de escape 
+      * seguido do resultado do ou exclusivo do octeto substituído 
+      * com o octeto0x20).
+      */
+      if(buffer[i] == FLAG) 
+        inf_trama[j + 1] = esc_flag;
+
+      /*
+      * Se no interior da trama ocorrer o octeto 01111101 (0x7d), 
+      * isto é, o padrão que corresponde ao octeto de escape, o 
+      * octeto é substituído pela sequência 0x7d 0x5d (octeto de 
+      * escape seguido do resultado do ou exclusivo do octeto 
+      * substituído com o octeto 0x20).
+      */
+      if(buffer[i] == esc) 
+        inf_trama[j + 1] = esc_escape;
+      
+      j += 2;
+    }
+    else{
+      inf_trama[j] = buffer[i];
+      ++j;
     }
 
-    i++;
+    ++i;
   }
 
-  if (size_BCC2 == 1)
-    final_msg[j] = BCC2;
-  else
-  {
-    final_msg = (unsigned char *)realloc(final_msg, ++size_final_msg);
-    final_msg[j] = BCC2_stuffed[0];
-    final_msg[j + 1] = BCC2_stuffed[1];
+  // BCC2 - Protection field - Data
+  unsigned char BCC2 = calc_BCC2(buffer, length);
+  int size_BCC2 = 1;
+
+  unsigned char *BCC2_stuffed;
+  if((BCC2_stuffed = (unsigned char *)malloc(sizeof(unsigned char))) == NULL){
+    perror("llwrite BCC2_stuffed malloc failed!");
+    exit(-1);
+  }
+  BCC2_stuffed = stuff_BCC2(BCC2, &size_BCC2);
+
+  if (size_BCC2 == 1) /* If no Flag or Escape byte is found in BCC2 */
+    inf_trama[j] = BCC2;
+  else{
+    if((inf_trama = (unsigned char *)realloc(inf_trama, ++*size_inf_trama)) == NULL){
+      perror("llwrite inf_trama BCC2 realloc failed!");
+      exit(-1);
+    }
+    inf_trama[j] = BCC2_stuffed[0];
+    inf_trama[j + 1] = BCC2_stuffed[1];
     j++;
   }
-  final_msg[j + 1] = FLAG;
 
-  do
-  {
-    unsigned char *aux;
-    aux = change_BCC1(final_msg, size_final_msg);
-    aux = change_BCC2(aux, size_final_msg);         
-    write(fd, aux, size_final_msg);
+  // F - FLAG
+  inf_trama[j + 1] = FLAG;
+
+  return inf_trama;
+}
+
+/*
+* Builds the information trama and sends it to the Receiver.
+* Reads the Supervision Trama sent by the Receiver and process it.
+* @param fd, *buffer, length
+* @return TRUE if no errors, else FALSE 
+*/
+int llwrite(int fd, unsigned char *buffer, int length){
+
+  int size_inf_trama = 0;
+  unsigned char *inf_trama = build_information_trama(buffer, length, &size_inf_trama);
+
+  int flag = FALSE;
+  unsigned char c;
+  while(1){
+
+    write(fd, inf_trama, size_inf_trama);
 
     alarm_flag = FALSE;
+    
     alarm(TIMEOUT);
-    unsigned char c = read_SET_W(fd);
+    
+    c = read_supervision_trama(fd);
+
+    // If the Receiver validates the Information Trama, llwrite was successful
     if ((c == C_RR1 && trama == 0) || (c == C_RR0 && trama == 1)){
-      printf("Recebeu rr %x -> trama = %d\n", c, trama);
+      printf("RR received! Value: %x. Trama = %d\n", c, trama);
       flag = FALSE;
       alarm_counter = 0;
       trama ^= 1;
       alarm(0);
     }
+    
+    // If an error occurred, the Receiver will send a REJ trama,
+    // and a retransmission will occur.
     else if (c == C_REJ1 || c == C_REJ0){
       flag = TRUE;
-      printf("Recebeu rej %x -> trama=%d\n", c, trama);
+      printf("REJ received! Value: %x. Trama = %d\n", c, trama);
       alarm(0);
     }
 
-  } while ((alarm_flag && alarm_counter < MAX) || flag);
+    if(!alarm_flag && (alarm_counter >= MAX)) break;
+    if(!flag) break;
+  }
 
   if (alarm_counter >= MAX)
     return FALSE;
-  else
-    return TRUE;
+  
+  return TRUE;
 }
 
 
@@ -434,10 +493,11 @@ int BCC2_test(unsigned char* msg, int msg_size)
 
 	if (BCC2 == msg[msg_size - 1])
 		return TRUE;
-	else
-		return FALSE;
+	
+  return FALSE;
 }
 
+int test = 0;
 unsigned char* llread(int fd, int* msg_size)
 {
 	unsigned char* msg = (unsigned char*)malloc(0);
@@ -448,119 +508,113 @@ unsigned char* llread(int fd, int* msg_size)
 	int send_data = FALSE;
 	int state = 0;
 
-	while (state != 6)
-	{
-		read(fd, &c, 1);
-		switch (state)
-		{
-		case 0:
-			if (c == FLAG)
-				state = 1;
-			break;
-		case 1:
-			if (c == A)
-				state = 2;
-			else
-			{
-				if (c == FLAG)
-					state = 1;
-				else
-					state = 0;
-			}
-			break;
-		case 2:
-			if (c == C10)
-			{
-				trama = 0;
-				read_c = c;
-				state = 3;
-			}
-			else if (c == C11)
-			{
-				trama = 1;
-				read_c = c;
-				state = 3;
-			}
-			else
-			{
-				if (c == FLAG)
-					state = 1;
-				else
-					state = 0;
-			}
-			break;
-		case 3:
-			if (c == (A ^ read_c))
-				state = 4;
-			else
-				state = 0;
-			break;
-		case 4:
-			if (c == FLAG)
-			{
-				if (BCC2_test(msg, *msg_size))
-				{
-					if (trama == 0)
-						send_SET(fd, C_RR1);
-					else
-						send_SET(fd, C_RR0);
+	while (state != 6){
 
-					state = 6;
-					send_data = TRUE;
-					printf("RR sent, trama -> %d\n", trama);
-				}
-				else
-				{
-					if (trama == 0)
-						send_SET(fd, C_REJ1);
-					else
-						send_SET(fd, C_REJ0);
-					state = 6;
-					send_data = FALSE;
-					printf("REJ sent, trama -> %d\n", trama);
-				}
-			}
-			else if (c == esc)
-			{
-				state = 5;
-			}
-			else
-			{
-				msg = (unsigned char*)realloc(msg, ++(*msg_size));
-				msg[*msg_size - 1] = c;
-			}
-			break;
-		case 5:
-			if (c == esc_flag)
-			{
-				msg = (unsigned char*)realloc(msg, ++(*msg_size));
-				msg[*msg_size - 1] = FLAG;
-			}
-			else
-			{
-				if (c == esc_escape)
-				{
-					msg = (unsigned char*)realloc(msg, ++(*msg_size));
-					msg[*msg_size - 1] = esc;
-				}
-				else
-				{
-					perror("Invalid character after esc character");
-					exit(-1);
-				}
-			}
-			state = 4;
-			break;
+		read(fd, &c, 1);
+
+		switch (state){
+      case 0:
+        if (c == FLAG)
+          state = 1;
+      break;
+
+      case 1:
+        if (c == A)
+          state = 2;
+        else if (c == FLAG)
+          state = 1;
+        else
+          state = 0;
+      break;
+
+      case 2:
+        if (c == C10){
+          trama = 0;
+          read_c = c;
+          state = 3;
+        }
+        else if (c == C11){
+          trama = 1;
+          read_c = c;
+          state = 3;
+        }
+        else{
+          if (c == FLAG)
+            state = 1;
+          else
+            state = 0;
+        }
+      break;
+
+      case 3:
+        if (c == (A ^ read_c))
+          state = 4;
+        else
+          state = 0;
+      break;
+
+      case 4:
+        if (c == FLAG){
+          
+          if (BCC2_test(msg, *msg_size)){
+            
+            if (trama == 0)
+              send_SET(fd, C_RR1);
+            else
+              send_SET(fd, C_RR0);
+
+            state = 6;
+            send_data = TRUE;
+            printf("RR sent, trama -> %d\n", trama);
+          }
+
+          else{
+            
+            if (trama == 0)
+              send_SET(fd, C_REJ1);
+            else
+              send_SET(fd, C_REJ0);
+
+            state = 6;
+            send_data = FALSE;
+            printf("REJ sent, trama -> %d\n", trama);
+          }
+        }
+        else if (c == esc) 
+          state = 5;
+        else{
+          msg = (unsigned char*)realloc(msg, ++(*msg_size));
+          msg[*msg_size - 1] = c;
+        }
+      break;
+
+      case 5:
+        if (c == esc_flag){
+          msg = (unsigned char*)realloc(msg, ++(*msg_size));
+          msg[*msg_size - 1] = FLAG;
+        }
+        else if (c == esc_escape){
+          msg = (unsigned char*)realloc(msg, ++(*msg_size));
+          msg[*msg_size - 1] = esc;
+        }
+        else{
+          perror("Invalid character after esc character");
+          exit(-1);
+        }
+        state = 4;
+      break;
 		}
 	}
 
 	printf("Message size = %d\n", *msg_size);
 
-	msg = (unsigned char*)realloc(msg, *msg_size - 1);
+	if((msg = (unsigned char*)realloc(msg, *msg_size - 1)) == NULL){
+    perror("Message realloc failed!");
+    exit(-1);
+  }
 	*msg_size = *msg_size - 1;
 
-	if (send_data)
-	{
+	if (send_data){
 		if (trama == test)
 			test ^= 1;
 		else
@@ -568,5 +622,6 @@ unsigned char* llread(int fd, int* msg_size)
 	}
 	else
 		*msg_size = 0;
+  
 	return msg;
 }

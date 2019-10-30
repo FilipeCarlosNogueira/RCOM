@@ -44,7 +44,7 @@ int main(int argc, char** argv)
 
   int size_control_package = 0;
 
-  unsigned char *start, *end;
+  unsigned char *start_package, *end_package;
 
   int size_packet = defined_size_packet;
 
@@ -73,10 +73,9 @@ int main(int argc, char** argv)
   // Save file name and the file name length
   printf("\n*File info*\n");
   size_file_name = strlen(argv[2]);
-
   if((file_name = (unsigned char *)malloc(size_file_name)) == NULL){
-      perror("file_name malloc failed!");
-      exit(-1);
+    perror("file_name malloc failed!");
+    exit(-1);
   }
   file_name = (unsigned char *)argv[2];
   printf("File name: %s\n", file_name);
@@ -98,14 +97,18 @@ int main(int argc, char** argv)
   /* --- Data transference --- */
   printf("*Data transference*\n");
 
-  start = control_package(C2_start, file_size, file_name, size_file_name, &size_control_package);
-  printf("Sent trama START...\n");
-  llwrite(fd, start, size_control_package);
+  printf("\n--Sending trama START...\n");
+  start_package = control_package(C2_start, file_size, file_name, size_file_name, &size_control_package);
+  if(!llwrite(fd, start_package, size_control_package)){
+    perror("Sending Control Package START failed!");
+    exit(-1);
+  } printf("--Sent trama START.\n");
 
   srand(time(NULL));
 
-  while (size_packet == defined_size_packet && index < file_size)
-  {
+  printf("\n--Splitting file and sending packages..\n");
+  while (size_packet == defined_size_packet && index < file_size){
+    
     packet = split_msg(msg, &index, &size_packet, file_size);
     printf("Sent packet number %d\n", total_tramas);
 
@@ -117,11 +120,14 @@ int main(int argc, char** argv)
       exit(-1);
     }
   }
+  printf("--File sent.\n");
 
-  end = control_package(C2_end, file_size, file_name, size_file_name, &size_control_package);
-
-  llwrite(fd, end, size_control_package);
-  printf("Sent trama END...\n");
+  printf("\n--Sending Trama END..\n");
+  end_package = control_package(C2_end, file_size, file_name, size_file_name, &size_control_package);
+  if(!llwrite(fd, end_package, size_control_package)){
+    perror("Sending Control Package END failed!");
+    exit(-1);
+  } printf("--Sent trama END.\n");
 
   /* --- Termination --- */
   printf("\n*Termination*\n");
@@ -133,7 +139,7 @@ int main(int argc, char** argv)
   clock_gettime(CLOCK_REALTIME, &clock_end);
 
   total_time = (clock_end.tv_sec - clock_start.tv_sec) + (clock_end.tv_nsec - clock_start.tv_nsec) / 1E9;
-  printf("Time passed (in seconds): %f\n", total_time);
+  printf("\nTime passed (in seconds): %f\n", total_time);
 
   sleep(2);
 

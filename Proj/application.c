@@ -17,10 +17,13 @@ int total_tramas = 0;
 /* --------- Write --------- */
 
 /*
-*
+* Creates the control package start and end.
+* Main structure: C (T L V)*
+* @param state, file_size, *file_name, size_file_name, *size_control_package
+* @return package
 */
-unsigned char *control_package(unsigned char state, off_t file_size, unsigned char *file_name, int size_file_name, int *size_control_package)
-{
+unsigned char *control_package(unsigned char state, off_t file_size, unsigned char *file_name, int size_file_name, int *size_control_package){
+	
 	if(state != C2_start && state != C2_end){
 		perror("Controle package not recognised!");
 		exit(-1);
@@ -28,29 +31,35 @@ unsigned char *control_package(unsigned char state, off_t file_size, unsigned ch
 
 	*size_control_package = 9 * sizeof(unsigned char) + size_file_name;
 
-	unsigned char *package;
-	if((package = (unsigned char *)malloc(*size_control_package)) == NULL){
-	perror("Control package maaloc failed!");
-	exit(-1);
+	unsigned char *control_package;
+	if((control_package = (unsigned char *)malloc(*size_control_package)) == NULL){
+		perror("Control package maaloc failed!");
+		exit(-1);
 	}
 
-	package[0] = state;
-	package[1] = T1;
-	package[2] = L1;
-	package[3] = (file_size >> 24) & 0xFF;
-	package[4] = (file_size >> 16) & 0xFF;
-	package[5] = (file_size >> 8) & 0xFF;
-	package[6] = file_size & 0xFF;
-	package[7] = T2;
-	package[8] = size_file_name;
+	/*
+	* 32 bit number range:
+	* 0 <-> (2^(32) − 1)
+	*/
 
+	control_package[0] = state;						// C = start / end
+	control_package[1] = T1;						// T = 0 - size of file
+	control_package[2] = L1;						// L = Size of file_size
+	control_package[3] = (file_size >> 24) & 0xFF;	// V = fourth 8 bits of file_size
+	control_package[4] = (file_size >> 16) & 0xFF;	// V = third 8 bits of file_size
+	control_package[5] = (file_size >> 8) & 0xFF;	// V = second 8 bits of file_size  
+	control_package[6] = file_size & 0xFF;			// V = first 8 bits of file_size 
+	control_package[7] = T2;						// T = 1 - name of file
+	control_package[8] = size_file_name;			// L = size of file_name
+
+	// V = file name
 	int i = 0;
-	while(i < size_file_name)
-	{
-	package[9 + i] = file_name[i];
-	i++;
+	while(i < size_file_name){
+		control_package[9 + i] = file_name[i];
+		i++;
 	}
-	return package;
+
+	return control_package;
 }
 
 unsigned char *split_msg(unsigned char *msg, off_t *index, int *size_packet, off_t file_size)

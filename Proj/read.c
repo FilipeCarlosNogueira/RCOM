@@ -62,13 +62,19 @@ int main(int argc, char** argv)
 	/* --- Data transference --- */
 	printf("*Data transference*\n");
 
+	printf("\n--Reading trama START...\n");
 	start = llread(fd, &start_size);
 
 	unsigned char* filename = start_filename(start);
 	file_size = start_file_size(start);
 
-	file = (unsigned char*)malloc(file_size);
+	if((file = (unsigned char*)malloc(file_size)) == NULL){
+		perror("file malloc failed!");
+		exit(-1);
+	}
+	printf("--Trama START processed.\n");
 
+	printf("\n--Reading split messages..\n");
 	while (TRUE)
 	{
 		msg_ready = llread(fd, &msg_size);
@@ -87,8 +93,9 @@ int main(int argc, char** argv)
 		memcpy(file + index, msg_ready, noHeader_size);
 		index += noHeader_size;
 	}
+	printf("--Split messages processed.\n");
 
-	printf("Message: ");
+	printf("\nMessage: ");
 	for(int i = 0; i < file_size; ++i)
 		printf("%x", file[i]);
 	printf("\n");
