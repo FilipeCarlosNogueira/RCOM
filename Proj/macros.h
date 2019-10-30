@@ -38,7 +38,7 @@
 #define esc_flag 0x5E
 #define esc_escape 0x5D
 
-#define defined_size_packet 100
+#define split_packet_size 100
 
 #define C_header 0x01
 

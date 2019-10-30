@@ -83,8 +83,7 @@ unsigned char *open_file(unsigned char *file_name, off_t *file_size){
 	stat((char *)file_name, &data);
 	(*file_size) = data.st_size;
 
-	file_data = (unsigned char *)malloc(*file_size);
-	if(file_data == NULL){
+	if((file_data = (unsigned char *)malloc(*file_size)) == NULL){
 		perror("file_data malloc failed!");
 		exit(-1);
 	}

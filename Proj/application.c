@@ -11,7 +11,7 @@
 #include "macros.h"
 #include "application.h"
 
-unsigned char msg_counter = 0;
+unsigned char packet_counter = 0;
 int total_tramas = 0;
 
 /* --------- Write --------- */
@@ -62,45 +62,73 @@ unsigned char *control_package(unsigned char state, off_t file_size, unsigned ch
 	return control_package;
 }
 
-unsigned char *split_msg(unsigned char *msg, off_t *index, int *size_packet, off_t file_size)
-{
-  unsigned char *packet;
-  int i = 0;
-  off_t j = *index;
+/*
+* Creates a packet either with size equal to split_packet_size or smaller.
+* @param *msg, *index, *size_split_packet, file_size
+* @return *split_packet
+*/
+unsigned char *split_msg(unsigned char *file_data, off_t *index, int *size_split_packet, off_t file_size){
 
-  if (*index + *size_packet > file_size)
-    *size_packet = file_size - *index;
+	// Checks if it's possible to build a packet with the size equal to split_packet_size.
+	// If not, creates a packet with the remaining bytes
+	if (*index + *size_split_packet > file_size)
+		*size_split_packet = file_size - *index;
 
-  packet = (unsigned char *)malloc(*size_packet);
+	unsigned char *split_packet;
+	if((split_packet = (unsigned char *)malloc(*size_split_packet)) == NULL){
+		perror("slpit_msg packet malloc failed!");
+		exit(-1);
+	}
 
-  while(i < *size_packet)
-  {
-    packet[i] = msg[j];
-    i++;
-    j++;
-  }
+	// Copies portion of the file data to the split packet
+	memcpy(split_packet, file_data + *index, *size_split_packet);
 
-  *index = j;
-  
-  return packet;
+	*index += *size_split_packet;
+
+	return split_packet;
 }
 
-unsigned char* header(unsigned char* msg, off_t file_size, int* packet_size)
-{
-	unsigned char* final_msg = (unsigned char*)malloc(file_size + 4);
+/*
+* Adds the Packet Header to the split packet
+* @param *split_packet, file_size, *application_packet_size
+* @return application_packet
+*/
+unsigned char* header(unsigned char *split_packet, int *application_packet_size){
+	
+	unsigned char* application_packet;
+	if((application_packet = (unsigned char*)malloc(*application_packet_size + 4)) == NULL){
+		perror("header application_packet malloc failed!");
+		exit(-1);
+	}
 
-	final_msg[0] = C_header;
-	final_msg[1] = msg_counter % 255;
-	final_msg[2] = (int)file_size / 256;
-	final_msg[3] = (int)file_size % 256;
+	/*
+	* Os pacotes de dados contêm obrigatoriamente um campo (um octeto) 
+	* com um número de sequência e um campo (dois octetos) que indica o 
+	* tamanho do respectivo campo de dados.
+	*
+	* -> Este tamanho depende do tamanho máximo do campo de Informação das tramas I.
+	*/
 
-	memcpy(final_msg + 4, msg, *packet_size);
-	*packet_size += 4;
+	// C – Control field (value: 1 – data)
+	application_packet[0] = C_header;
 
-	msg_counter++;
-	total_tramas++;
+	// N – Sequence number (255 module)
+	application_packet[1] = packet_counter % 255;
 
-	return final_msg;
+	// (K = 256 * L2 + L1)
+	// L1 - number of octets (k) of Data field
+	application_packet[2] = *application_packet_size % 256;
+	// L2 - number of octets (k) of Data field
+	application_packet[3] = *application_packet_size / 256;
+
+	// P1 ... PK – Data field of package (K octets)
+	memcpy(application_packet + 4, split_packet, *application_packet_size);
+	*application_packet_size += 4;
+
+	++packet_counter;
+	++total_tramas;
+
+	return application_packet;
 }
 
 /* --------- Read --------- */

@@ -40,18 +40,18 @@ int main(int argc, char** argv)
   int size_file_name = 0;
 
   off_t file_size; //em bytes
-  unsigned char *msg;
+  unsigned char *file_data;
 
   int size_control_package = 0;
 
   unsigned char *start_package, *end_package;
 
-  int size_packet = defined_size_packet;
+  unsigned char *split_packet;
+  int size_split_packet = split_packet_size;
 
   off_t index = 0;
-  unsigned char *packet;
-  int header_size;
-  unsigned char *header_msg;
+  unsigned char *application_packet;
+  int application_packet_size;
 
   struct timespec clock_start, clock_end;
 
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
   printf("File name: %s\n", file_name);
 
   // Open and read file
-  msg = open_file((unsigned char *)argv[2], &file_size);
+  file_data = open_file((unsigned char *)argv[2], &file_size);
   printf("File size: %lld bytes\n\n", file_size);
 
   // Start clock
@@ -89,54 +89,58 @@ int main(int argc, char** argv)
 
   /* --- Data connection establishment --- */
   printf("*Data connection establishment*\n");
-  if (!llopen(fd, TRANSMITTER)){
-    perror("Connection failed!");
+  if (llopen(fd, TRANSMITTER) == -1){
+    perror("Data Connection failed!");
     return -1;
   }
 
   /* --- Data transference --- */
   printf("*Data transference*\n");
 
-  printf("\n--Sending trama START...\n");
+  // Start Trama
+  printf("\n--> Sending trama START...\n");
   start_package = control_package(C2_start, file_size, file_name, size_file_name, &size_control_package);
   if(!llwrite(fd, start_package, size_control_package)){
     perror("Sending Control Package START failed!");
     exit(-1);
-  } printf("--Sent trama START.\n");
+  } printf("--> Sent trama START.\n");
 
   srand(time(NULL));
 
-  printf("\n--Splitting file and sending packages..\n");
-  while (size_packet == defined_size_packet && index < file_size){
+  // Information Tramas
+  printf("\n--> Splitting file and sending packages..\n");
+  while (size_split_packet == split_packet_size && index < file_size){
     
-    packet = split_msg(msg, &index, &size_packet, file_size);
-    printf("Sent packet number %d\n", total_tramas);
+    split_packet = split_msg(file_data, &index, &size_split_packet, file_size);
 
-    header_size = size_packet;
-    header_msg = header(packet, file_size, &header_size);
+    printf("Sending packet number %d..\n", total_tramas);
+
+    application_packet_size = size_split_packet;
+    application_packet = header(split_packet, &application_packet_size);
     
-    if (!llwrite(fd, header_msg, header_size)){
+    if (!llwrite(fd, application_packet, application_packet_size)){
       perror("Reached alarms limit!\n");
       exit(-1);
     }
   }
-  printf("--File sent.\n");
+  printf("--> File sent.\n");
 
-  printf("\n--Sending Trama END..\n");
+  // End Trama
+  printf("\n--> Sending Trama END..\n");
   end_package = control_package(C2_end, file_size, file_name, size_file_name, &size_control_package);
   if(!llwrite(fd, end_package, size_control_package)){
     perror("Sending Control Package END failed!");
     exit(-1);
-  } printf("--Sent trama END.\n");
+  } printf("--> Sent trama END.\n");
 
   /* --- Termination --- */
   printf("\n*Termination*\n");
   llclose(fd, TRANSMITTER);
 
-  printf("\nTransmitter terminated!\n");
-
   // Stop clock
   clock_gettime(CLOCK_REALTIME, &clock_end);
+
+  printf("\nTransmitter terminated!\n");
 
   total_time = (clock_end.tv_sec - clock_start.tv_sec) + (clock_end.tv_nsec - clock_start.tv_nsec) / 1E9;
   printf("\nTime passed (in seconds): %f\n", total_time);

@@ -15,8 +15,8 @@
 #include "dataLink.h"
 #include "application.h"
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv){
+	
 	#ifdef UNIX
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 	/* --- Data transference --- */
 	printf("*Data transference*\n");
 
-	printf("\n--Reading trama START...\n");
+	printf("\n--> Reading trama START...\n");
 	start = llread(fd, &start_size);
 
 	unsigned char* filename = start_filename(start);
@@ -72,9 +72,9 @@ int main(int argc, char** argv)
 		perror("file malloc failed!");
 		exit(-1);
 	}
-	printf("--Trama START processed.\n");
+	printf("--> Trama START processed.\n");
 
-	printf("\n--Reading split messages..\n");
+	printf("\n--> Reading split messages..\n");
 	while (TRUE)
 	{
 		msg_ready = llread(fd, &msg_size);
@@ -93,23 +93,23 @@ int main(int argc, char** argv)
 		memcpy(file + index, msg_ready, noHeader_size);
 		index += noHeader_size;
 	}
-	printf("--Split messages processed.\n");
+	printf("--> Split messages processed.\n");
 
 	printf("\nMessage: ");
 	for(int i = 0; i < file_size; ++i)
 		printf("%x", file[i]);
 	printf("\n");
 
-	printf("\n*New file*\n");
-	new_file(file, &file_size, filename);
-	printf("New file name: %s\n", filename);
-	printf("New file size: %lld\n", file_size);
-
 	/* --- Termination --- */
 	printf("\n*Termination*\n");
 	llclose(fd, RECEIVER);
 
 	printf("\nReceiver terminated!\n");
+
+	printf("\n*New file*\n");
+	new_file(file, &file_size, filename);
+	printf("New file name: %s\n", filename);
+	printf("New file size: %lld\n", file_size);
 	
 	sleep(1);
 

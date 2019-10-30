@@ -31,7 +31,7 @@ void send_SET(int fd, unsigned char c){
 }
 
 /*
-* Function used to analise the SET and UA packages
+* Function used to analise the SET, UA and DISC packages
 * @param fd, c_set
 * @return TRUE if no errors / FALSE if errors
 */
@@ -97,9 +97,6 @@ bool read_SET(int fd, unsigned char c_set){
       }
   }
 
-  // Writes message received
-  //printf("Message received: %x, %x, %x, %x, %x\n", message[0], message[1], message[2], message[3], message[4]);
-
   return true;
 }
 
@@ -112,30 +109,32 @@ bool read_SET(int fd, unsigned char c_set){
 */
 int llopen(int fd, int mode){
 
-  // Transmitter
-  if(mode){
-    while(alarm_counter < 3) {
-      if (alarm_flag) {
+  switch (mode){
+    case TRANSMITTER:
+      
+      while(alarm_counter < 3) {
+        if (alarm_flag) {
 
-        send_SET(fd, C);
-        printf("SET send!\n");
+          send_SET(fd, C);
+          printf("SET send!\n");
 
-        alarm(TIMEOUT);
-        alarm_flag = FALSE;
+          alarm(TIMEOUT);
+          alarm_flag = FALSE;
+        }
+
+        //reads response from Receptor
+        if(read_SET(fd, C_UA)){
+          printf("UA received!\n\n");
+          break;
+        }
       }
 
-      //reads response from Receptor
-      if(read_SET(fd, C_UA)){
-        printf("UA received!\n\n");
-        break;
-      }
-    }
+      if(alarm_counter == 3) return -1;
+    break;
 
-    if(alarm_counter == 3) return -1;
-  }
-  // Receiver 
-  else {
-      bool result;
+    bool result;
+    case RECEIVER:
+      
       do{
         result = read_SET(fd, C);
       }while(!result);
@@ -144,6 +143,10 @@ int llopen(int fd, int mode){
 
       send_SET(fd, C_UA);
       printf("UA sent!\n\n");
+    break;
+    
+    default:
+    break;
   }
 
   return 1;
@@ -151,40 +154,39 @@ int llopen(int fd, int mode){
 
 /*
 * Establishes the last connection
-* Transmitter sends 
-* 
 * @param fd: COM1, COM2, ... 
 * @param mode: TRANSMITTER / RECEIVER
 */
 int llclose(int fd, int mode){
 
-  unsigned char c;
+  switch (mode){
+    bool result;
+    case TRANSMITTER:
+      send_SET(fd, DISC);
+      printf("DISC sent...\n");
 
-  // Transmitter
-  if(mode){
-    send_SET(fd, DISC);
-    printf("DISC sent...\n");
+      do{
+        result = read_SET(fd, DISC);
+      } while (!result);
+      printf("DISC read...\n");
 
-    c = read_SET_W(fd);
+      send_SET(fd, C_UA);
+      printf("Final UA sent!\n");
+    break;
+    
+    case RECEIVER:
+      read_SET(fd, DISC);
+      printf("DISC received...\n");
 
-    while (c != DISC)
-      c = read_SET_W(fd);
+      send_SET(fd, DISC);
+      printf("Sent DISC...\n");
 
-    printf("DISC read...\n");
-
-    send_SET(fd, C_UA);
-    printf("Final UA sent!\n");
-  }
-  // Receiver
-  else{
-    read_SET(fd, DISC);
-    printf("DISC received...\n");
-
-    send_SET(fd, DISC);
-    printf("Sent DISC...\n");
-
-    read_SET(fd, C_UA);
-    printf("UA received...\n");
+      read_SET(fd, C_UA);
+      printf("UA received...\n");
+    break;
+    
+    default:
+    break;
   }
 
 	if (tcsetattr(fd, TCSANOW, &oldtio) == -1){
@@ -269,37 +271,18 @@ unsigned char *stuff_BCC2(unsigned char BCC2, int *size_BCC2){
 
   unsigned char *stuffed_BCC2 = NULL;
   
-  /*
-  * Se no interior da trama ocorrer o octeto 01111110 (0x7e), 
-  * isto é, o padrão que corresponde a uma flag, o octeto é 
-  * substituído pela sequência 0x7d 0x5e (octeto de escape 
-  * seguido do resultado do ou exclusivo do octeto substituído 
-  * com o octeto0x20).
-  */
-  if (BCC2 == FLAG){
-    if((stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *))) == NULL){
-      perror("FLAG stuffed_BCC2 malloc failed!");
-      exit(-1);
-    }
-    stuffed_BCC2[0] = esc;
-    stuffed_BCC2[1] = esc_flag;
-    (*size_BCC2)++;
-  }
+  if (BCC2 == FLAG || BCC2 == esc){
 
-  /*
-  * Se no interior da trama ocorrer o octeto 01111101 (0x7d), 
-  * isto é, o padrão que corresponde ao octeto de escape, o 
-  * octeto é substituído pela sequência 0x7d 0x5d (octeto de 
-  * escape seguido do resultado do ou exclusivo do octeto 
-  * substituído com o octeto 0x20).
-  */
-  else if (BCC2 == esc){
     if((stuffed_BCC2 = (unsigned char *)malloc(2 * sizeof(unsigned char *))) == NULL){
-      perror("ESC stuffed_BCC2 malloc failed!");
+      perror("stuffed_BCC2 malloc failed!");
       exit(-1);
     }
     stuffed_BCC2[0] = esc;
-    stuffed_BCC2[1] = esc_escape;
+    
+    if(BCC2 == FLAG) stuffed_BCC2[1] = esc_flag;
+
+    if(BCC2 == FLAG) stuffed_BCC2[1] = esc_escape;
+
     (*size_BCC2)++;
   }
 
@@ -402,14 +385,9 @@ unsigned char *build_information_trama(unsigned char *buffer, int length, int *s
   unsigned char BCC2 = calc_BCC2(buffer, length);
   int size_BCC2 = 1;
 
-  unsigned char *BCC2_stuffed;
-  if((BCC2_stuffed = (unsigned char *)malloc(sizeof(unsigned char))) == NULL){
-    perror("llwrite BCC2_stuffed malloc failed!");
-    exit(-1);
-  }
-  BCC2_stuffed = stuff_BCC2(BCC2, &size_BCC2);
+  unsigned char *BCC2_stuffed = stuff_BCC2(BCC2, &size_BCC2);
 
-  if (size_BCC2 == 1) /* If no Flag or Escape byte is found in BCC2 */
+  if (BCC2_stuffed == NULL) /* If no Flag or Escape byte is found in BCC2 */
     inf_trama[j] = BCC2;
   else{
     if((inf_trama = (unsigned char *)realloc(inf_trama, ++*size_inf_trama)) == NULL){
@@ -443,6 +421,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
   while(1){
 
     write(fd, inf_trama, size_inf_trama);
+    trama ^= 1; printf("I sent! Ns = %d\n", trama); trama ^= 1;
 
     alarm_flag = FALSE;
     
@@ -452,7 +431,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
 
     // If the Receiver validates the Information Trama, llwrite was successful
     if ((c == C_RR1 && trama == 0) || (c == C_RR0 && trama == 1)){
-      printf("RR received! Value: %x. Trama = %d\n", c, trama);
+      printf("RR received! Value: %x. Nr = %d\n", c, trama);
       flag = FALSE;
       alarm_counter = 0;
       trama ^= 1;
@@ -463,7 +442,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
     // and a retransmission will occur.
     else if (c == C_REJ1 || c == C_REJ0){
       flag = TRUE;
-      printf("REJ received! Value: %x. Trama = %d\n", c, trama);
+      printf("REJ received! Value: %x. Nr = %d\n", c, trama);
       alarm(0);
     }
 
@@ -480,13 +459,12 @@ int llwrite(int fd, unsigned char *buffer, int length){
 
 /* --------- READ --------- */
 
-int BCC2_test(unsigned char* msg, int msg_size)
-{
+int BCC2_test(unsigned char* msg, int msg_size){
+
 	int i = 1;
 	unsigned char BCC2 = msg[0];
 
-	while(i < msg_size - 1)
-	{
+	while(i < msg_size - 1){
 		BCC2 ^= msg[i];
 		i++;
 	}
@@ -498,8 +476,8 @@ int BCC2_test(unsigned char* msg, int msg_size)
 }
 
 int test = 0;
-unsigned char* llread(int fd, int* msg_size)
-{
+unsigned char* llread(int fd, int* msg_size){
+
 	unsigned char* msg = (unsigned char*)malloc(0);
 	*msg_size = 0;
 	unsigned char read_c;
@@ -558,26 +536,26 @@ unsigned char* llread(int fd, int* msg_size)
           
           if (BCC2_test(msg, *msg_size)){
             
-            if (trama == 0)
-              send_SET(fd, C_RR1);
-            else
+            if (trama)
               send_SET(fd, C_RR0);
+            else
+              send_SET(fd, C_RR1);
 
             state = 6;
             send_data = TRUE;
-            printf("RR sent, trama -> %d\n", trama);
+            printf("RR sent! Nr = %d\n", trama);
           }
 
           else{
             
-            if (trama == 0)
-              send_SET(fd, C_REJ1);
-            else
+            if (trama)
               send_SET(fd, C_REJ0);
+            else
+              send_SET(fd, C_REJ1);
 
             state = 6;
             send_data = FALSE;
-            printf("REJ sent, trama -> %d\n", trama);
+            printf("REJ sent! Nr = %d\n", trama);
           }
         }
         else if (c == esc) 

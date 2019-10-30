@@ -1,13 +1,13 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
-unsigned char msg_counter;
+unsigned char packet_counter;
 extern int total_tramas;
 
 /* --------- Write --------- */
 unsigned char *control_package(unsigned char state, off_t file_size, unsigned char *file_name, int size_file_name, int *size_control_package);
-unsigned char *split_msg(unsigned char *msg, off_t *index, int *size_packet, off_t file_size);
-unsigned char* header(unsigned char* msg, off_t file_size, int* packet_size);
+unsigned char *split_msg(unsigned char *file_data, off_t *index, int *size_split_packet, off_t file_size);
+unsigned char* header(unsigned char* split_packet, int* application_packet_size);
 
 /* --------- Read --------- */
 unsigned char* start_filename(unsigned char* start);
