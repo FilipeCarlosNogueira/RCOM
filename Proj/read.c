@@ -80,8 +80,8 @@ int main(int argc, char** argv){
 	printf("\n--> Reading split messages..\n");
 	int noHeader_size;
 	while (TRUE){
-
-		if ((msg_ready = llread(fd, &msg_size)) == 0)
+		msg_ready = llread(fd, &msg_size);
+		if (msg_size == 0)
 			continue;
 		if (final_packet_check(start, start_size, msg_ready, msg_size)){
 			printf("--> Split messages processed.\n");

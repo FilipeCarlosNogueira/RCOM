@@ -650,13 +650,8 @@ unsigned char* llread(int fd, int* packet_size){
   }
 	*packet_size -= 1;
 
-	printf("Message size = %d\n", *packet_size);
-
-	// if (send_data && Ns == nr)
-	// 	nr ^= 1;
-	// else
-	// 	*packet_size = 0;
   if(!send_data) *packet_size = 0;
+  printf("Message size = %d\n", *packet_size);
   
 	return packet;
 }
