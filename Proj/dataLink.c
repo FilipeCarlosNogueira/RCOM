@@ -428,7 +428,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
     
     alarm(TIMEOUT);
     
-    c = read_supervision_trama(fd);
+    if((c = read_supervision_trama(fd)) == 0xFF) continue;
 
     // If the Receiver validates the Information Trama, llwrite was successful
     if ((c == C_RR1 && ns == 0) || (c == C_RR0 && ns == 1)){
