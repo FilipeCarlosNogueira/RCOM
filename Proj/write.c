@@ -16,8 +16,8 @@
 #include "dataLink.h"
 #include "application.h"
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv){
+  
   #ifdef UNIX
     if ( (argc < 2) ||
           ((strcmp("/dev/ttyS0", argv[1])!=0) &&

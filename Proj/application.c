@@ -139,6 +139,9 @@ unsigned char* header(unsigned char *split_packet, int *application_packet_size)
 * @return name
 */
 unsigned char* start_filename(unsigned char* start){
+
+	// Check T2
+	if(start[7] != 1) return NULL;
 	
 	// Parse size_file_name
 	int size_file_name = (int)start[8];
@@ -173,7 +176,7 @@ off_t start_file_size(unsigned char* start){
 * @param *start, start_size, *end, end_size
 * @return 
 */
-bool final_msg_check(unsigned char* start, int start_size, unsigned char* end, int end_size){
+bool final_packet_check(unsigned char* start, int start_size, unsigned char* end, int end_size){
 	
 	int start_index = 1;
 	int end_index = 1;

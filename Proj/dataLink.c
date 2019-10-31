@@ -308,7 +308,7 @@ unsigned char calc_BCC2(unsigned char *msg, int size){
   return BCC2;
 }
 
-int trama = 0;
+int ns = 0;
 /*
 * Builds a Information Trama respecting the Transparence specifications
 * @param *buffer, length, *size_inf_trama
@@ -330,7 +330,7 @@ unsigned char *build_information_trama(unsigned char *buffer, int length, int *s
   inf_trama[1] = A;
 
   // C - Control field
-  if (trama == 0)
+  if (ns == 0)
     inf_trama[2] = C10;
   else
     inf_trama[2] = C11;
@@ -338,7 +338,7 @@ unsigned char *build_information_trama(unsigned char *buffer, int length, int *s
   // BCC1 - Protection field - Head
   inf_trama[3] = (inf_trama[1] ^ inf_trama[2]);
 
-  // D1 + Data + Dn
+  // D1 + ... + Dn
   int i = 0;
   int j = 4;
   while(i < length){
@@ -422,7 +422,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
   while(1){
 
     write(fd, inf_trama, size_inf_trama);
-    trama ^= 1; printf("I sent! Ns = %d\n", trama); trama ^= 1;
+    printf("I sent! Ns = %d\n", ns);
 
     alarm_flag = FALSE;
     
@@ -431,20 +431,21 @@ int llwrite(int fd, unsigned char *buffer, int length){
     c = read_supervision_trama(fd);
 
     // If the Receiver validates the Information Trama, llwrite was successful
-    if ((c == C_RR1 && trama == 0) || (c == C_RR0 && trama == 1)){
-      printf("RR received! Value: %x. Nr = %d\n", c, trama);
+    if ((c == C_RR1 && ns == 0) || (c == C_RR0 && ns == 1)){
       flag = FALSE;
       alarm_counter = 0;
-      trama ^= 1;
+      ns ^= 1;
       alarm(0);
+      printf("RR received! Value: %x. Nr = %d\n", c, ns);
     }
     
     // If an error occurred, the Receiver will send a REJ trama,
     // and a retransmission will occur.
     else if (c == C_REJ1 || c == C_REJ0){
       flag = TRUE;
-      printf("REJ received! Value: %x. Nr = %d\n", c, trama);
+      printf("REJ received! Value: %x. Nr = %d\n", c, ns);
       alarm(0);
+      continue;
     }
 
     if(!alarm_flag && (alarm_counter >= MAX)) break;
@@ -490,7 +491,6 @@ int nr = 0;
 unsigned char* llread(int fd, int* packet_size){
 
   *packet_size = 0;
-	int Ns = 0;
 	bool send_data = FALSE;
 
   unsigned char* packet;
@@ -526,12 +526,12 @@ unsigned char* llread(int fd, int* packet_size){
       // C
       case 2:
         if (c == C10){
-          Ns = 0;
+          nr = 1;
           control_byte = c;
           state = 3;
         }
         else if (c == C11){
-          Ns = 1;
+          nr = 0;
           control_byte = c;
           state = 3;
         }
@@ -568,14 +568,15 @@ unsigned char* llread(int fd, int* packet_size){
           */
           if (BCC2_test(packet, *packet_size)){
             
-            if (Ns)
-              send_SET(fd, C_RR0);
-            else
+            if (nr)
               send_SET(fd, C_RR1);
+            else
+              send_SET(fd, C_RR0);
+              
 
             state = 6;
             send_data = TRUE;
-            Ns ^= 1; printf("RR sent! Nr = %d\n", Ns); Ns ^= 1;
+            printf("RR sent! Nr = %d\n", nr);
           }
 
           /*
@@ -588,14 +589,14 @@ unsigned char* llread(int fd, int* packet_size){
           */
           else{
             
-            if (Ns)
-              send_SET(fd, C_REJ0);
-            else
+            if (nr)
               send_SET(fd, C_REJ1);
+            else
+              send_SET(fd, C_REJ0);
 
             state = 6;
             send_data = FALSE;
-            Ns ^= 1; printf("REJ sent! Nr = %d\n", Ns); Ns ^= 1;
+            printf("REJ sent! Nr = %d\n", nr);
           }
         }
         
@@ -651,10 +652,11 @@ unsigned char* llread(int fd, int* packet_size){
 
 	printf("Message size = %d\n", *packet_size);
 
-	if (send_data && Ns == nr)
-		nr ^= 1;
-	else
-		*packet_size = 0;
+	// if (send_data && Ns == nr)
+	// 	nr ^= 1;
+	// else
+	// 	*packet_size = 0;
+  if(!send_data) *packet_size = 0;
   
 	return packet;
 }

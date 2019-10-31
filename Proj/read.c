@@ -15,8 +15,8 @@
 #include "dataLink.h"
 #include "application.h"
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv){
+
 	#ifdef UNIX
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
 
 		if ((msg_ready = llread(fd, &msg_size)) == 0)
 			continue;
-		if (final_msg_check(start, start_size, msg_ready, msg_size)){
+		if (final_packet_check(start, start_size, msg_ready, msg_size)){
 			printf("--> Split messages processed.\n");
 			printf("--> Trama END processed.\n");
 			break;

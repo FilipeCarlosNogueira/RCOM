@@ -98,7 +98,8 @@ unsigned char *open_file(unsigned char *file_name, off_t *file_size){
 }
 
 /*
-*
+* Creates a new file.
+* @param *msg, *file_size, filename[]
 */
 void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[]){
 	FILE* new_file = fopen((char*)filename, "wb+");
