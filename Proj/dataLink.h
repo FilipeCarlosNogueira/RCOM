@@ -17,8 +17,8 @@ int llwrite(int fd, unsigned char *buffer, int length);
 
 // READ
 
-int BCC2_test(unsigned char* msg, int msg_size);
-unsigned char* llread(int fd, int* msg_size);
+int BCC2_test(unsigned char* packet, int packet_size);
+unsigned char* llread(int fd, int* buffer);
 
 
 #endif

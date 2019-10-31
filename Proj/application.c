@@ -116,10 +116,10 @@ unsigned char* header(unsigned char *split_packet, int *application_packet_size)
 	application_packet[1] = packet_counter % 255;
 
 	// (K = 256 * L2 + L1)
-	// L1 - number of octets (k) of Data field
-	application_packet[2] = *application_packet_size % 256;
 	// L2 - number of octets (k) of Data field
-	application_packet[3] = *application_packet_size / 256;
+	application_packet[2] = *application_packet_size / 256;
+	// L1 - number of octets (k) of Data field
+	application_packet[3] = *application_packet_size % 256;
 
 	// P1 ... PK – Data field of package (K octets)
 	memcpy(application_packet + 4, split_packet, *application_packet_size);
@@ -133,63 +133,85 @@ unsigned char* header(unsigned char *split_packet, int *application_packet_size)
 
 /* --------- Read --------- */
 
-unsigned char* start_filename(unsigned char* start)
-{
-	int auxL2 = (int)start[8];
-	unsigned char* name = (unsigned char*)malloc(auxL2 + 1);
-
-	int i;
-
-	for (i = 0; i < auxL2; i++)
-	{
-		name[i] = start[9 + i];
+/*
+* Parses the name of the file.
+* @param *start
+* @return name
+*/
+unsigned char* start_filename(unsigned char* start){
+	
+	// Parse size_file_name
+	int size_file_name = (int)start[8];
+	
+	unsigned char* name;
+	if((name = (unsigned char*)malloc(size_file_name + 1)) == NULL){
+		perror("start_filename name malloc failed!");
+		exit(-1);
 	}
 
-	name[auxL2] = '\0';
+	// Parse name
+	for (int i = 0; i < size_file_name; i++)
+		name[i] = start[9 + i];
+
+	// Add termination
+	name[size_file_name] = '\0';
 
 	return name;
 }
 
-off_t start_file_size(unsigned char* start)
-{
+/*
+* Parses the file size.
+* @param *start
+* @return file size in bytes
+*/
+off_t start_file_size(unsigned char* start){
 	return (start[3] << 24) | (start[4] << 16) | (start[5] << 8) | (start[6]);
 }
 
-int final_msg_check(unsigned char* start, int start_size, unsigned char* final, int final_size)
-{
-	int s = 1;
-	int f = 1;
+/*
+* Validates the END controle package
+* @param *start, start_size, *end, end_size
+* @return 
+*/
+bool final_msg_check(unsigned char* start, int start_size, unsigned char* end, int end_size){
+	
+	int start_index = 1;
+	int end_index = 1;
 
-	if (start_size != final_size)
-		return FALSE;
-	else
-	{
-		if (final[0] == C2_end)
-		{
-			while(s < start_size)
-			{
-				if (start[s] != final[f])
-					return FALSE;
+	// check size
+	if (start_size != end_size) return FALSE;
+	
+	// check if END trama is the equal to START trama
+	else if (end[0] == C2_end){
+		
+		while(start_index < start_size){
+			if (start[start_index] != end[end_index]) return FALSE;
 
-				s++;
-				f++;
-			}
-			return TRUE;
+			++start_index;
+			++end_index;
 		}
-		else
-			return FALSE;
+		return TRUE;
 	}
+	else return FALSE;
 }
 
-unsigned char* remove_header(unsigned char* remove, int remove_size, int* removed_size)
-{
+/*
+* Removes Package Header.
+* @param *remove, remove_size, *removed_size
+* @return msg_removed_header
+*/
+unsigned char* remove_header(unsigned char* remove, int remove_size, int* removed_size){
+	
 	int i = 0;
 	int j = 4;
 
-	unsigned char* msg_removed_header = (unsigned char*)malloc(remove_size - 4);
+	unsigned char* msg_removed_header;
+	if((msg_removed_header = (unsigned char*)malloc(remove_size - 4)) == NULL){
+		perror("remove_header msg_removed_header malloc failed!");
+		exit(-1);
+	}
 
-	while(i < remove_size)
-	{
+	while(i < remove_size){
 		msg_removed_header[i] = remove[j];
 
 		i++;

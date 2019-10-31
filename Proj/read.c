@@ -15,8 +15,8 @@
 #include "dataLink.h"
 #include "application.h"
 
-int main(int argc, char** argv){
-	
+int main(int argc, char** argv)
+{
 	#ifdef UNIX
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -54,7 +54,7 @@ int main(int argc, char** argv){
 
 	/* --- Data connection establishment --- */
 	printf("\n*Data connection establishment*\n");
-	if (!llopen(fd, RECEIVER)){
+	if (llopen(fd, RECEIVER) == -1){
 		perror("Connection failed!");
 		return -1;
 	}
@@ -63,7 +63,10 @@ int main(int argc, char** argv){
 	printf("*Data transference*\n");
 
 	printf("\n--> Reading trama START...\n");
-	start = llread(fd, &start_size);
+	if((start = llread(fd, &start_size)) == 0){
+		perror("llread START trama failed!");
+		exit(-1);
+	}
 
 	unsigned char* filename = start_filename(start);
 	file_size = start_file_size(start);
@@ -75,25 +78,24 @@ int main(int argc, char** argv){
 	printf("--> Trama START processed.\n");
 
 	printf("\n--> Reading split messages..\n");
-	while (TRUE)
-	{
-		msg_ready = llread(fd, &msg_size);
-		if (msg_size == 0)
+	int noHeader_size;
+	while (TRUE){
+
+		if ((msg_ready = llread(fd, &msg_size)) == 0)
 			continue;
-		if (final_msg_check(start, start_size, msg_ready, msg_size))
-		{
-			printf("Final message received!\n");
+		if (final_msg_check(start, start_size, msg_ready, msg_size)){
+			printf("--> Split messages processed.\n");
+			printf("--> Trama END processed.\n");
 			break;
 		}
 
-		int noHeader_size = 0;
+		noHeader_size = 0;
 
 		msg_ready = remove_header(msg_ready, msg_size, &noHeader_size);
 
 		memcpy(file + index, msg_ready, noHeader_size);
 		index += noHeader_size;
 	}
-	printf("--> Split messages processed.\n");
 
 	printf("\nMessage: ");
 	for(int i = 0; i < file_size; ++i)

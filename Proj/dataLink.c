@@ -156,6 +156,7 @@ int llopen(int fd, int mode){
 * Establishes the last connection
 * @param fd: COM1, COM2, ... 
 * @param mode: TRANSMITTER / RECEIVER
+* @return 1
 */
 int llclose(int fd, int mode){
 
@@ -459,147 +460,201 @@ int llwrite(int fd, unsigned char *buffer, int length){
 
 /* --------- READ --------- */
 
-int BCC2_test(unsigned char* msg, int msg_size){
+/*
+* Validates the BCC2.
+*  @param *packet, packet_size
+* @return TRUE if well built / FALSE if not
+*/
+int BCC2_test(unsigned char* packet, int packet_size){
 
 	int i = 1;
-	unsigned char BCC2 = msg[0];
+	unsigned char BCC2 = packet[0];
 
-	while(i < msg_size - 1){
-		BCC2 ^= msg[i];
+	while(i < packet_size - 1){
+		BCC2 ^= packet[i];
 		i++;
 	}
 
-	if (BCC2 == msg[msg_size - 1])
+	if (BCC2 == packet[packet_size - 1])
 		return TRUE;
 	
   return FALSE;
 }
 
-int test = 0;
-unsigned char* llread(int fd, int* msg_size){
+/*
+* Reads and validates the information trama.
+* @param fd, *packet_size
+* @return *packet;
+*/
+int nr = 0;
+unsigned char* llread(int fd, int* packet_size){
 
-	unsigned char* msg = (unsigned char*)malloc(0);
-	*msg_size = 0;
-	unsigned char read_c;
+  *packet_size = 0;
+	int Ns = 0;
+	bool send_data = FALSE;
+
+  unsigned char* packet;
+  if((packet = (unsigned char*)malloc(0)) == NULL){
+    perror("read_trama_I packet malloc failed!");
+    exit(-1);
+  }
+
+  int state = 0;
+  unsigned char control_byte;
 	unsigned char c;
-	int trama = 0;
-	int send_data = FALSE;
-	int state = 0;
-
-	while (state != 6){
+  
+  // Read and interpret the Information Trama 
+  while (state != 6){
 
 		read(fd, &c, 1);
 
 		switch (state){
+      // FLAG
       case 0:
         if (c == FLAG)
           state = 1;
       break;
 
+      // A
       case 1:
         if (c == A)
           state = 2;
+        else
+          state = 0;
+      break;
+
+      // C
+      case 2:
+        if (c == C10){
+          Ns = 0;
+          control_byte = c;
+          state = 3;
+        }
+        else if (c == C11){
+          Ns = 1;
+          control_byte = c;
+          state = 3;
+        }
         else if (c == FLAG)
           state = 1;
         else
           state = 0;
       break;
 
-      case 2:
-        if (c == C10){
-          trama = 0;
-          read_c = c;
-          state = 3;
-        }
-        else if (c == C11){
-          trama = 1;
-          read_c = c;
-          state = 3;
-        }
-        else{
-          if (c == FLAG)
-            state = 1;
-          else
-            state = 0;
-        }
-      break;
-
+      // BCC1
       case 3:
-        if (c == (A ^ read_c))
+        if (c == (A ^ control_byte))
           state = 4;
         else
           state = 0;
       break;
 
+      // Package Data + ESCAPE + FLAG
       case 4:
+
+        // FLAG
         if (c == FLAG){
           
-          if (BCC2_test(msg, *msg_size)){
+          /*
+          * Tramas I recebidas sem erros detectados no cabeçalho e 
+          * no campo de dados são aceites para processamento:
+          * 
+          * Se se tratar duma nova trama, o campo de dados é aceite 
+          * (e passado à Aplicação), e a trama deve ser confirmada 
+          * com RR.
+          * 
+          * Se se tratar dum duplicado, o campo de dados é descartado, 
+          * mas deve fazer-se confirmação da trama com RR.
+          */
+          if (BCC2_test(packet, *packet_size)){
             
-            if (trama)
+            if (Ns)
               send_SET(fd, C_RR0);
             else
               send_SET(fd, C_RR1);
 
             state = 6;
             send_data = TRUE;
-            printf("RR sent! Nr = %d\n", trama);
+            Ns ^= 1; printf("RR sent! Nr = %d\n", Ns); Ns ^= 1;
           }
 
+          /*
+          * Tramas I sem erro detectado no cabeçalho mas com erro 
+          * detectado (pelo respectivo BCC) no campo de dados :
+          * 
+          * Se se tratar duma nova trama, é conveniente fazer um pedido 
+          * de retransmissão com REJ, o que permite antecipar a 
+          * ocorrência de time-out no emissor. 
+          */
           else{
             
-            if (trama)
+            if (Ns)
               send_SET(fd, C_REJ0);
             else
               send_SET(fd, C_REJ1);
 
             state = 6;
             send_data = FALSE;
-            printf("REJ sent! Nr = %d\n", trama);
+            Ns ^= 1; printf("REJ sent! Nr = %d\n", Ns); Ns ^= 1;
           }
         }
-        else if (c == esc) 
-          state = 5;
+        
+        // ESCAPE
+        else if (c == esc) state = 5;
+
+        // Package Data
         else{
-          msg = (unsigned char*)realloc(msg, ++(*msg_size));
-          msg[*msg_size - 1] = c;
+          if((packet = (unsigned char*)realloc(packet, ++(*packet_size))) == NULL){
+            perror("read_trama_I case 4 packet realloc failed!");
+            exit(-1);
+          }
+          packet[*packet_size - 1] = c;
         }
       break;
 
+      // Associated ESCAPE flags
       case 5:
+
+        // ESCAPE FLAG
         if (c == esc_flag){
-          msg = (unsigned char*)realloc(msg, ++(*msg_size));
-          msg[*msg_size - 1] = FLAG;
+          if((packet = (unsigned char*)realloc(packet, ++(*packet_size))) == NULL){
+            perror("read_trama_I esc_flag packet realloc failed!");
+            exit(-1);
+          }
+          packet[*packet_size - 1] = FLAG;
         }
+
+        // ESCAPE ESCAPE
         else if (c == esc_escape){
-          msg = (unsigned char*)realloc(msg, ++(*msg_size));
-          msg[*msg_size - 1] = esc;
+          if((packet = (unsigned char*)realloc(packet, ++(*packet_size))) == NULL){
+            perror("read_trama_I esc_escape packet realloc failed!");
+            exit(-1);
+          }
+          packet[*packet_size - 1] = esc;
         }
+
         else{
           perror("Invalid character after esc character");
           exit(-1);
         }
+
         state = 4;
       break;
 		}
 	}
 
-	printf("Message size = %d\n", *msg_size);
-
-	if((msg = (unsigned char*)realloc(msg, *msg_size - 1)) == NULL){
+  if((packet = (unsigned char*)realloc(packet, *packet_size - 1)) == NULL){
     perror("Message realloc failed!");
     exit(-1);
   }
-	*msg_size = *msg_size - 1;
+	*packet_size -= 1;
 
-	if (send_data){
-		if (trama == test)
-			test ^= 1;
-		else
-			*msg_size = 0;
-	}
+	printf("Message size = %d\n", *packet_size);
+
+	if (send_data && Ns == nr)
+		nr ^= 1;
 	else
-		*msg_size = 0;
+		*packet_size = 0;
   
-	return msg;
+	return packet;
 }
