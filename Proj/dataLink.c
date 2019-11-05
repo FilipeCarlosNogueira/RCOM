@@ -428,6 +428,8 @@ int llwrite(int fd, unsigned char *buffer, int length){
     
     alarm(TIMEOUT);
     
+    // If read_supervision_trama() can't read the control byte, the function it returns 0xff (255).
+    // In this case the same trama is sent again.
     if((c = read_supervision_trama(fd)) == 0xFF) continue;
 
     // If the Receiver validates the Information Trama, llwrite was successful

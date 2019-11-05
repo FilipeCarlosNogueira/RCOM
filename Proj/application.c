@@ -53,11 +53,7 @@ unsigned char *control_package(unsigned char state, off_t file_size, unsigned ch
 	control_package[8] = size_file_name;			// L = size of file_name
 
 	// V = file name
-	int i = 0;
-	while(i < size_file_name){
-		control_package[9 + i] = file_name[i];
-		i++;
-	}
+	memcpy(&control_package[9], file_name, size_file_name);
 
 	return control_package;
 }
@@ -101,6 +97,9 @@ unsigned char* header(unsigned char *split_packet, int *application_packet_size)
 		exit(-1);
 	}
 
+	// C – Control field (value: 1 – data)
+	application_packet[0] = C_header;
+
 	/*
 	* Os pacotes de dados contêm obrigatoriamente um campo (um octeto) 
 	* com um número de sequência e um campo (dois octetos) que indica o 
@@ -108,9 +107,6 @@ unsigned char* header(unsigned char *split_packet, int *application_packet_size)
 	*
 	* -> Este tamanho depende do tamanho máximo do campo de Informação das tramas I.
 	*/
-
-	// C – Control field (value: 1 – data)
-	application_packet[0] = C_header;
 
 	// N – Sequence number (255 module)
 	application_packet[1] = packet_counter % 255;
@@ -153,8 +149,7 @@ unsigned char* start_filename(unsigned char* start){
 	}
 
 	// Parse name
-	for (int i = 0; i < size_file_name; i++)
-		name[i] = start[9 + i];
+	memcpy(name, &start[9], size_file_name);
 
 	// Add termination
 	name[size_file_name] = '\0';
@@ -168,7 +163,12 @@ unsigned char* start_filename(unsigned char* start){
 * @return file size in bytes
 */
 off_t start_file_size(unsigned char* start){
-	return (start[3] << 24) | (start[4] << 16) | (start[5] << 8) | (start[6]);
+
+	off_t size = 0;
+	for (size_t i = 0; i < 4; ++i)
+		size |= (start[3+i] << (24 - 8*i));
+
+	return size;
 }
 
 /*
@@ -185,7 +185,7 @@ bool final_packet_check(unsigned char* start, int start_size, unsigned char* end
 	if (start_size != end_size) return FALSE;
 	
 	// check if END trama is the equal to START trama
-	else if (end[0] == C2_end){
+	if (end[0] == C2_end){
 		
 		while(start_index < start_size){
 			if (start[start_index] != end[end_index]) return FALSE;
@@ -195,7 +195,8 @@ bool final_packet_check(unsigned char* start, int start_size, unsigned char* end
 		}
 		return TRUE;
 	}
-	else return FALSE;
+	
+	return FALSE;
 }
 
 /*
@@ -204,9 +205,6 @@ bool final_packet_check(unsigned char* start, int start_size, unsigned char* end
 * @return msg_removed_header
 */
 unsigned char* remove_header(unsigned char* remove, int remove_size, int* removed_size){
-	
-	int i = 0;
-	int j = 4;
 
 	unsigned char* msg_removed_header;
 	if((msg_removed_header = (unsigned char*)malloc(remove_size - 4)) == NULL){
@@ -214,12 +212,7 @@ unsigned char* remove_header(unsigned char* remove, int remove_size, int* remove
 		exit(-1);
 	}
 
-	while(i < remove_size){
-		msg_removed_header[i] = remove[j];
-
-		i++;
-		j++;
-	}
+	memcpy(msg_removed_header, &remove[4], remove_size);
 
 	*removed_size = remove_size - 4;
 

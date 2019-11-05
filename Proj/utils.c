@@ -60,7 +60,7 @@ void setTermios(int fd){
 void alarm_handler(){
 	alarm_flag=TRUE;
 	++alarm_counter;
-  printf("alarme # %d\n", alarm_counter);
+	printf("alarme nº %d\n", alarm_counter);
 }
 
 /*
@@ -102,9 +102,19 @@ unsigned char *open_file(unsigned char *file_name, off_t *file_size){
 * @param *msg, *file_size, filename[]
 */
 void new_file(unsigned char* msg, off_t* file_size, unsigned char filename[]){
-	FILE* new_file = fopen((char*)filename, "wb+");
+	FILE* new_file;
+	if((new_file = fopen((char*)filename, "wb+")) == NULL){
+		perror("fopen of new_file() failed!");
+		exit(-1);
+	}
 
-	fwrite((void*)msg, 1, *file_size, new_file);
+	if(fwrite((void*)msg, 1, *file_size, new_file) != *file_size){
+		perror("fwrite of new_file() failed!");
+		exit(-1);
+	}
 
-	fclose(new_file);
+	if(fclose(new_file) != 0){
+		perror("fclose of new_file() failed!");
+		exit(-1);
+	}
 }
