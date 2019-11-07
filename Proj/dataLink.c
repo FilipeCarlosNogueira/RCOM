@@ -39,7 +39,6 @@ bool read_SET(int fd, unsigned char c_set){
     
   int state=0;
   char c = 0;
-  char message[5];
 
   while (state != 5) {       /* loop for input */
 
@@ -47,27 +46,18 @@ bool read_SET(int fd, unsigned char c_set){
 
       switch(state){
           case 0:
-              if(c==FLAG){
-                  message[state] = c;
-                  state++;
-              }
+              if(c==FLAG) state++;
               else return false;
           break;
 
           case 1:
-              if(c==A){
-                  message[state] = c;
-                  state++;
-              }
+              if(c==A) state++;
               else if(c == FLAG) state = 1;
               else state = 0;
           break;
 
           case 2:
-              if(c == c_set){
-                  message[state] = c;
-                  state++;
-              }
+              if(c == c_set) state++;
               else if(c == FLAG){
                   state--;
               }
@@ -75,19 +65,13 @@ bool read_SET(int fd, unsigned char c_set){
           break;
 
           case 3:
-              if(c == (A ^ c_set)){
-                  message[state] = c;
-                  state++;
-              }
+              if(c == (A ^ c_set)) state++;
               else if(c == FLAG) state = 1;
               else state = 0;
           break;
 
           case 4:
-              if(c == FLAG){
-                  message[state] = c;
-                  state++;
-              }
+              if(c == FLAG) state++;
               else state = 0;
           break;
 
