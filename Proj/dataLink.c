@@ -521,7 +521,10 @@ unsigned char* llread(int fd, int* packet_size){
     if((previous_c_1 == c) && (previous_c_2 == c) && (c != FLAG)) connection_lost = true;
 
     // When the connection is establish again, the frist byte is always the FLAG byte. 
-    if((previous_c_1 == previous_c_2) && (c == FLAG)) state = 0;
+    if((previous_c_1 == previous_c_2) && (c == FLAG && connection_lost)){
+      state = 0;
+      connection_lost = false;
+    }
 
 		switch (state){
       // FLAG
