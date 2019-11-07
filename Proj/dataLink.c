@@ -414,9 +414,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
     
     // If read_supervision_trama() can't read the control byte, the function it returns 0xff (255).
     // In this case the same trama is sent again.
-    printf("ola\n");
     if((c = read_supervision_trama(fd)) == 0xFF){
-      printf("C: %x\n", c);
       if(!alarm_flag && (alarm_counter >= MAX)) break;
       continue;
     }
@@ -426,7 +424,6 @@ int llwrite(int fd, unsigned char *buffer, int length){
       flag = FALSE;
       alarm_counter = 0;
       ns ^= 1;
-      //alarm(0);
       printf("RR received! Value: %x. Nr = %d\n", c, ns);
     }
     
@@ -437,7 +434,6 @@ int llwrite(int fd, unsigned char *buffer, int length){
       printf("REJ received! Value: %x. Nr = %d\n", c, ns^1);
     }
 
-    printf("adeus\n");
     if(!alarm_flag && (alarm_counter >= MAX)) break;
     if(!flag) break;
   }
