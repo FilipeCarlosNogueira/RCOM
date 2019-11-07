@@ -450,8 +450,7 @@ int llwrite(int fd, unsigned char *buffer, int length){
     // and a retransmission will occur.
     else if (c == C_REJ1 || c == C_REJ0){
       flag = TRUE;
-      printf("REJ received! Value: %x. Nr = %d\n", c, ns);
-      //alarm(0);
+      printf("REJ received! Value: %x. Nr = %d\n", c, ns^1);
     }
 
     printf("adeus\n");
@@ -509,11 +508,20 @@ unsigned char* llread(int fd, int* packet_size){
   int state = 0;
   unsigned char control_byte;
 	unsigned char c;
+  unsigned char previous_c_1 = 0xff;
+  unsigned char previous_c_2 = 0xff;
+  bool connection_lost = false;
   
   // Read and interpret the Information Trama 
   while (state != 6){
 
 		read(fd, &c, 1);
+
+    // If the last 3 bytes were equal them an error occurd and the connection got lost.
+    if((previous_c_1 == c) && (previous_c_2 == c) && (c != FLAG)) connection_lost = true;
+
+    // When the connection is establish again, the frist byte is always the FLAG byte. 
+    if((previous_c_1 == previous_c_2) && (c == FLAG)) state = 0;
 
 		switch (state){
       // FLAG
@@ -649,6 +657,9 @@ unsigned char* llread(int fd, int* packet_size){
         state = 4;
       break;
 		}
+
+    previous_c_2 = previous_c_1;
+    previous_c_1 = c;
 	}
 
   if((packet = (unsigned char*)realloc(packet, *packet_size - 1)) == NULL){
