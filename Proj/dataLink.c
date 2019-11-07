@@ -431,7 +431,11 @@ int llwrite(int fd, unsigned char *buffer, int length){
     // If read_supervision_trama() can't read the control byte, the function it returns 0xff (255).
     // In this case the same trama is sent again.
     printf("ola\n");
-    if((c = read_supervision_trama(fd)) == 0xFF) continue;
+    if((c = read_supervision_trama(fd)) == 0xFF){
+      printf("C: %x\n", c);
+      if(!alarm_flag && (alarm_counter >= MAX)) break;
+      continue;
+    }
 
     // If the Receiver validates the Information Trama, llwrite was successful
     else if ((c == C_RR1 && ns == 0) || (c == C_RR0 && ns == 1)){
